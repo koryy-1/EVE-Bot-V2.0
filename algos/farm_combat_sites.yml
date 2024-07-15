@@ -1,0 +1,12 @@
+algorythm:
+  - action: check_anomalies
+  - action: if_anomaly_exists
+    then:
+      - action: warp_to_anomaly
+      - action: clear_region
+      - action: loot_containers
+      - action: repeat
+  - action: if_no_anomaly
+    then:
+      - action: move_to_next_system
+      - action: start_over

@@ -1,0 +1,5 @@
+algorythm:
+  - action: check_next_system
+  - action: if_next_gate_exists
+    then:
+      - action: goto_next_system
