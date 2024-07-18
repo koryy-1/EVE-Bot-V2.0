@@ -87,11 +87,18 @@ namespace Application.Services
         {
             lock (_lock)
             {
-                return new BotStatus { 
-                    IsServicesRunning = _isRunning,
-                    ExecWorkerStatus = _execWorker.Status.ToString(),
-                    WorkerStatuses = _workers.Select(x => x.Status.ToString()),
-                };
+                if (_isRunning)
+                {
+                    return new BotStatus { 
+                        IsServicesRunning = _isRunning,
+                        ExecWorkerStatus = _execWorker.Status.ToString(),
+                        WorkerStatuses = _workers.Select(x => x.Status.ToString()),
+                    };
+                }
+                else
+                {
+                    return new BotStatus();
+                }
             }
         }
 

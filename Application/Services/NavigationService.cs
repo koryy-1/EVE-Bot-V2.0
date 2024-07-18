@@ -136,7 +136,7 @@ namespace Application.Services
             {
                 return;
             }
-            var nearlyAnomaly = anomalies.OrderBy(anomaly => anomaly.Distance.value).FirstOrDefault();
+            var nearlyAnomaly = anomalies.OrderBy(anomaly => anomaly.Distance.Value).FirstOrDefault();
             await _probeScannerApiClient.WarpToAnomaly(nearlyAnomaly);
 
             // todo: finish GotoAnomalyRequested when ship locating near anomaly in 2-3 km
