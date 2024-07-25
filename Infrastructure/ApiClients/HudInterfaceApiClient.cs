@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http.Json;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -34,11 +33,11 @@ namespace Infrastructure.ApiClients
             return await response.Content.ReadFromJsonAsync<HealthPoints>();
         }
 
-        public async Task<IEnumerable<Module>> GetAllModules()
+        public async Task<IEnumerable<ShipModule>> GetAllModules()
         {
             var response = await _httpClient.GetAsync("/HudInterface/GetAllModules");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<IEnumerable<Module>>();
+            return await response.Content.ReadFromJsonAsync<IEnumerable<ShipModule>>();
         }
 
         public async Task<HudInterface> GetHudInfo()

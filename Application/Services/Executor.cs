@@ -12,13 +12,18 @@ namespace Application.Services
     public class Executor : IExecutor
     {
         private Autopilot _autopilot;
-        private IBotStateService _botStateService;
+        private FarmingStrategy _farmingStrategy;
+        private ICoordinator _coordinator;
         private CancellationTokenSource _cancellationTokenSource;
 
-        public Executor(IBotStateService botStateService)
+        public Executor(ICoordinator coordinator,
+            Autopilot autopilot,
+            FarmingStrategy farmingStrategy
+            )
         {
-            _botStateService = botStateService;
-            _autopilot = new Autopilot(_botStateService);
+            _coordinator = coordinator;
+            _autopilot = autopilot;
+            _farmingStrategy = farmingStrategy;
 
         }
         public Task StartAsync()
@@ -29,11 +34,17 @@ namespace Application.Services
             {
                 while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
-                    if (_botStateService.Command.ExecutorAuthorized
-                    && !_botStateService.State.IsStrategyRunning
+                    if (_coordinator.Commands.ExecutorAuthorized
+                    //&& !_autopilot.IsCompleted()
+                    && !_coordinator.BotState.IsStrategyRunning
                     )
                     {
-                        _autopilot.Start();
+                        //switch (switch_on)
+                        //{
+                        //    default:
+                        //}
+                        //_autopilot.Start();
+                        _farmingStrategy.Start();
                     }
                     await Task.Delay(1000);
                 }
@@ -42,7 +53,7 @@ namespace Application.Services
 
         public void Stop()
         {
-            _botStateService.UpdateCommand(cmd => cmd.ExecutorAuthorized = false);
+            _coordinator.Commands.ExecutorAuthorized = false;
             _cancellationTokenSource?.Cancel();
         }
     }

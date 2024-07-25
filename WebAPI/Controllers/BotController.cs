@@ -66,7 +66,7 @@ namespace WebAPI.Controllers
         }
 
         [HttpPost("AuthorizeExecutor", Name = "AuthorizeExecutor")]
-        public async Task<IActionResult> AuthorizeExecutor()
+        public IActionResult AuthorizeExecutor()
         {
             if (!_botService.GetBotStatus().IsServicesRunning)
             {

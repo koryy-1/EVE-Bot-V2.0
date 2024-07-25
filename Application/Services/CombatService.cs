@@ -1,4 +1,7 @@
 ﻿using Application.Interfaces;
+using Application.Interfaces.ApiClients;
+using Domen.Entities.Commands;
+using Domen.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,12 +12,14 @@ namespace Application.Services
 {
     public class CombatService : ICombatService, IWorkerService
     {
-        private IBotStateService _botStateService;
+        private ICoordinator _coordinator;
+        private IOverviewApiClient _overviewApiClient;
         private CancellationTokenSource _cancellationTokenSource;
 
-        public CombatService(IBotStateService botStateService)
+        public CombatService(ICoordinator coordinator, IOverviewApiClient overviewApiClient)
         {
-            _botStateService = botStateService;
+            _coordinator = coordinator;
+            _overviewApiClient = overviewApiClient;
         }
 
         public Task StartAsync()
@@ -25,6 +30,11 @@ namespace Application.Services
             {
                 while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
+                    if (_coordinator.Commands.IsBattleModeActivated)
+                    {
+                        EnsureAimTargetInWeaponRange();
+                        await EnsureSetupMovementCommand();
+                    }
 
                     await Task.Delay(1000);
                 }
@@ -36,22 +46,57 @@ namespace Application.Services
             _cancellationTokenSource?.Cancel();
         }
 
-        public void DestroyTarget()
+        private void EnsureAimTargetInWeaponRange()
         {
-            throw new NotImplementedException();
+            if (IsAimTargetInWeaponRange())
+                _coordinator.Commands.OpenFireAuthorized = true;
+            else
+                _coordinator.Commands.OpenFireAuthorized = false;
         }
 
-        public void LockTarget()
+        private async Task EnsureSetupMovementCommand()
         {
-            throw new NotImplementedException();
+            if (!IsAimTargetInWeaponRange())
+                await SetMovementCommand();
+            else
+                UnsetMovementCommand();
         }
 
-        public void PrepareToAttack()
+        private async Task SetMovementCommand()
         {
-            throw new NotImplementedException();
+            var ovObjects = await _overviewApiClient.GetOverViewInfo();
+            var nearestTarget = ovObjects
+                .Where(item => Utils.Color2Text(item.Color) == Colors.Red)
+                .OrderBy(item => item.Distance.Value)
+                .FirstOrDefault();
+
+            var cmd = new MovementCommand()
+            {
+                Requested = true,
+                Target = nearestTarget,
+                Action = SpaceObjectAction.Approach,
+                ExpectingMovementState = FlightMode.Approaching
+            };
+
+            _coordinator.Commands.MoveCommands[PriorityLevel.Medium] = cmd;
         }
 
-        public void UnlockTarget()
+        private void UnsetMovementCommand()
+        {
+            _coordinator.Commands.MoveCommands[PriorityLevel.Medium].Requested = false;
+        }
+
+        public bool IsAimTargetInWeaponRange()
+        {
+            return _coordinator.Commands.IsTargetInWeaponRange;
+        }
+
+        public bool IsTargetLocked()
+        {
+            return _coordinator.Commands.IsTargetLocked;
+        }
+
+        public void SetDestroyTargetCommand()
         {
             throw new NotImplementedException();
         }

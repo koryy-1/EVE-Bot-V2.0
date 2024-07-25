@@ -25,6 +25,6 @@ namespace Domen.Entities
         public Distance Distance { get; set; }
         public string Name { get; set; }
         public string Type { get; set; }
-        public int Speed { get; set; }
+        public long Speed { get; set; }
     }
 }

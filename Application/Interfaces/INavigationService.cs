@@ -11,7 +11,7 @@ namespace Application.Interfaces
     {
         public bool GotoNextSystemRequested();
         public bool IsCommandExecuting();
-        public bool IsMovementCommandSet();
+        public bool IsCommandRequested();
         public Task ExecuteMovement();
         public bool IsWarpOrJumpState();
         public Task JumpToMarkedGate();

@@ -7,9 +7,11 @@ using System.Threading.Tasks;
 
 namespace Application.Services
 {
-    public class DiagnosticsService : IWorkerService
+    public class InsuranceService : IWorkerService
     {
-        // проверяет наличие ракет / дронов и просто докает и выключает executor
+        // проверить дскан, овервью на наличие опасных шипов
+        // проверить чат
+        // проверить хп корабля и выставить команду на апроч ближайшей станции
         public Task StartAsync()
         {
             throw new NotImplementedException();

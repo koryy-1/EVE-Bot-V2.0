@@ -34,5 +34,14 @@ namespace Application.Services
 
             return Colors.None;
         }
+
+        public static double Distance2Km(Distance distance)
+        {
+            if (distance.Measure == "m")
+            {
+                return distance.Value / 1000;
+            }
+            return distance.Value;
+        }
     }
 }

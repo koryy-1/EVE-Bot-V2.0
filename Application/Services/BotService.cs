@@ -12,18 +12,18 @@ namespace Application.Services
     public class BotService : IBotService
     {
         private readonly IEnumerable<IWorkerService> _workerServices;
-        private IEnumerable<Task> _workers;
         private readonly IExecutor _executor;
-        private Task _execWorker;
-        private IBotStateService _botStateService;
+        //private IEnumerable<Task> _workers;
+        //private Task _execWorker;
+        private ICoordinator _coordinator;
         private bool _isRunning;
         private readonly object _lock = new object();
 
-        public BotService(IEnumerable<IWorkerService> workerServices, IExecutor executor, IBotStateService botStateService)
+        public BotService(IEnumerable<IWorkerService> workerServices, IExecutor executor, ICoordinator coordinator)
         {
             _workerServices = workerServices;
             _executor = executor;
-            _botStateService = botStateService;
+            _coordinator = coordinator;
             _isRunning = false;
         }
 
@@ -42,8 +42,8 @@ namespace Application.Services
 
             // after checking output "Core Systems Operational"
 
-            _workers = workers;
-            _execWorker = execWorker;
+            //_workers = workers;
+            //_execWorker = execWorker;
 
             Task.WhenAll(workers);
             Task.WhenAll(execWorker);
@@ -67,19 +67,21 @@ namespace Application.Services
 
         public void AuthorizeExecutor()
         {
-            _botStateService.UpdateCommand(cmd => cmd.ExecutorAuthorized = true);
+            // чекнуть если уже запущен
+            _coordinator.Commands.ExecutorAuthorized = true;
         }
 
         public void DenyExecutorAuthorization()
         {
-            _botStateService.UpdateCommand(cmd => cmd.ExecutorAuthorized = false);
+            // чекнуть если уже остановлен
+            _coordinator.Commands.ExecutorAuthorized = false;
         }
 
         public BotState GetBotState()
         {
             lock (_lock)
             {
-                return _botStateService.State;
+                return _coordinator.BotState;
             }
         }
 
@@ -91,8 +93,8 @@ namespace Application.Services
                 {
                     return new BotStatus { 
                         IsServicesRunning = _isRunning,
-                        ExecWorkerStatus = _execWorker.Status.ToString(),
-                        WorkerStatuses = _workers.Select(x => x.Status.ToString()),
+                        //ExecWorkerStatus = _execWorker.Status.ToString(),
+                        //WorkerStatuses = _workers.Select(x => x.Status.ToString()),
                     };
                 }
                 else
@@ -104,7 +106,7 @@ namespace Application.Services
 
         public void LoadConfig(BotConfig config)
         {
-            throw new NotImplementedException();
+            _coordinator.SetConfig(config);
         }
     }
 }

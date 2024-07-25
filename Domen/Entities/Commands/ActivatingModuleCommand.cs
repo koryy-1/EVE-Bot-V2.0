@@ -4,10 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Application.Interfaces
+namespace Domen.Entities.Commands
 {
-    public interface ICombatService
+    internal class ActivatingModuleCommand
     {
-        public void SetDestroyTargetCommand();
     }
 }

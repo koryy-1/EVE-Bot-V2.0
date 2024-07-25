@@ -5,24 +5,25 @@ using System.Text;
 using System.Threading.Tasks;
 using Application.Interfaces;
 using Application.Services;
+using Domen.Entities.Commands;
 using Domen.Enums;
 
 namespace Application.Strategies
 {
     public class Autopilot
     {
-        private IBotStateService _botStateService;
+        private ICoordinator _coordinator;
 
-        public Autopilot(IBotStateService botStateService)
+        public Autopilot(ICoordinator botStateService)
         {
-            _botStateService = botStateService;
+            _coordinator = botStateService;
         }
 
         public async void Start()
         {
-            _botStateService.UpdateState(state => state.IsStrategyRunning = true);
-            //todo: не завершать стратку если корабль в варпе
-            while (IsDestSet() && IsNotWarpState() && StartAuthorized())
+            _coordinator.BotState.IsStrategyRunning = true;
+
+            while (StartAuthorized() && !IsCompleted())
             {
                 GotoNextSystem();
                 await Task.Delay(5000);
@@ -32,27 +33,27 @@ namespace Application.Strategies
 
         private void Stop()
         {
-            _botStateService.UpdateState(state => state.IsStrategyRunning = false);
+            _coordinator.BotState.IsStrategyRunning = false;
         }
 
         private bool StartAuthorized()
         {
-            return _botStateService.Command.ExecutorAuthorized;
+            return _coordinator.Commands.ExecutorAuthorized;
         }
 
-        private bool IsDestSet()
+        public bool IsCompleted()
         {
-            return _botStateService.State.IsDestSet;
+            return !_coordinator.ShipState.IsDestSet;
         }
 
         private bool IsNotWarpState()
         {
-            return _botStateService.State.CurrentMovement != FlightMode.Warping;
+            return _coordinator.ShipState.CurrentMovement != FlightMode.Warping;
         }
 
         private void GotoNextSystem()
         {
-            _botStateService.UpdateCommand(cmd => cmd.GotoNextSystemRequested = true);
+            _coordinator.Commands.GotoNextSystemCommand.Requested = true;
         }
     }
 }

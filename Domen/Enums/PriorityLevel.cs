@@ -4,9 +4,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Domen.Entities
+namespace Domen.Enums
 {
-    internal class Ship
+    public enum PriorityLevel
     {
+        Low,
+        Medium,
+        High,
     }
 }

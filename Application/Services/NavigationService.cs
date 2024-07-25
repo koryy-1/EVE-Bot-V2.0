@@ -12,19 +12,22 @@ namespace Application.Services
 {
     public class NavigationService : INavigationService, IWorkerService
     {
-        private IBotStateService _botStateService;
+        private ICoordinator _coordinator;
         private IOverviewApiClient _overviewApiClient;
         private ISelectItemApiClient _selectItemApiClient;
         private IProbeScannerApiClient _probeScannerApiClient;
+
         private CancellationTokenSource _cancellationTokenSource;
 
-        public NavigationService(IBotStateService botStateService, 
+        public NavigationService(ICoordinator coordinator, 
             IOverviewApiClient overviewApiClient, 
-            ISelectItemApiClient selectItemApiClient)
+            ISelectItemApiClient selectItemApiClient,
+            IProbeScannerApiClient probeScannerApiClient)
         {
-            _botStateService = botStateService;
+            _coordinator = coordinator;
             _overviewApiClient = overviewApiClient;
             _selectItemApiClient = selectItemApiClient;
+            _probeScannerApiClient = probeScannerApiClient;
         }
 
         public Task StartAsync()
@@ -48,17 +51,14 @@ namespace Application.Services
                         continue;
                     }
 
-                    //if (GotoAnomalyRequested)
-                    //{
-                    //    WarpToAnomaly();
-                    //    await Wait();
-                    //    continue;
-                    //}
-
-                    if (!IsCommandExecuting())
+                    if (WarpToAnomalyRequested())
                     {
-                        await ExecuteMovement();
+                        await WarpToAnomaly();
+                        await Wait();
+                        continue;
                     }
+
+                    await EnsureCommandsExecuting();
 
                     await Task.Delay(1000);
                 }
@@ -70,77 +70,94 @@ namespace Application.Services
             _cancellationTokenSource?.Cancel();
         }
 
-        public bool GotoNextSystemRequested()
+        private async Task EnsureCommandsExecuting()
         {
-            return _botStateService.Command.GotoNextSystemRequested;
+            // ship stop if not requested?
+            if (!IsCommandRequested())
+                return;
+
+            if (!IsCommandExecuting())
+            {
+                await ExecuteMovement();
+            }
+        }
+
+        public bool IsCommandRequested()
+        {
+            return _coordinator.Commands.MoveCommands.Any(cmd => cmd.Value.Requested);
         }
 
         public bool IsCommandExecuting()
         {
-            if (!IsMovementCommandSet())
-            {
-                return true;
-            }
-
-            return _botStateService.State.CurrentMovement == _botStateService.Command.ExpectingMovementState;
-        }
-
-        public bool IsMovementCommandSet()
-        {
-            return _botStateService.Command.MovementCommand != SpaceObjectAction.None;
+            var cmd = _coordinator.Commands.MoveCommands
+                .Where(cmd => cmd.Value.Requested)
+                .OrderByDescending(cmd => cmd.Key)
+                .FirstOrDefault();
+            return _coordinator.ShipState.CurrentMovement == cmd.Value.ExpectingMovementState;
         }
 
         public async Task ExecuteMovement()
         {
-            await _overviewApiClient.ClickOnObject(_botStateService.Command.MovementObject);
-            await _selectItemApiClient.ClickButton(_botStateService.Command.MovementCommand.ToString());
+            var cmd = _coordinator.Commands.MoveCommands
+                .Where(cmd => cmd.Value.Requested)
+                .OrderByDescending(cmd => cmd.Key)
+                .FirstOrDefault();
+
+            await _overviewApiClient.ClickOnObject(cmd.Value.Target);
+            await _selectItemApiClient.ClickButton(cmd.Value.Action.ToString());
+        }
+
+        public bool GotoNextSystemRequested()
+        {
+            return _coordinator.Commands.GotoNextSystemCommand.Requested;
+        }
+
+        public bool WarpToAnomalyRequested()
+        {
+            return _coordinator.Commands.WarpToAnomalyCommand.Requested;
         }
 
         public bool IsWarpOrJumpState()
         {
             return 
-                _botStateService.State.CurrentMovement == FlightMode.Warping
-                || _botStateService.State.CurrentMovement == FlightMode.Jumping;
+                _coordinator.ShipState.CurrentMovement == FlightMode.Warping
+                || _coordinator.ShipState.CurrentMovement == FlightMode.Jumping;
         }
 
         public async Task JumpToMarkedGate()
         {
-            var items = await _overviewApiClient.GetOverViewInfo();
+            var ovObjects = await _overviewApiClient.GetOverViewInfo();
+            
+            var markedGate = ovObjects
+                .Where(item => item.Name == _coordinator.Commands.GotoNextSystemCommand.NextSystemName)
+                .FirstOrDefault();
 
-            var markedGate = items.Where(item => Utils.Color2Text(item.Color) == Colors.Yellow).FirstOrDefault();
-            // добавить исключения типа cargo container, wreck и тд
-
-            if (markedGate != null)
+            if (markedGate is null)
             {
-                await _overviewApiClient.ClickOnObject(markedGate);
-                var selectedItemInfo = await _selectItemApiClient.GetSelectItemInfo();
-                if (selectedItemInfo.Buttons.Where(btn => btn.Action == "Jump").Any())
-                {
-                    await _selectItemApiClient.ClickButton("Jump");
-                }
-                else
-                {
-                    await _selectItemApiClient.ClickButton("Dock");
-                }
+                markedGate = ovObjects
+                    .Where(item => Utils.Color2Text(item.Color) == Colors.Yellow)
+                    .Where(item => item.Name != "Cargo container" && !item.Name.Contains("Wreck")) // Exclude Extra
+                    .FirstOrDefault();
             }
+            if (markedGate is null)
+                return;
 
-            // todo: finish GotoNextSystemRequested when system changing or dest is null
-            _botStateService.UpdateCommand(cmd => cmd.GotoNextSystemRequested = false);
+            _coordinator.Commands.GotoNextSystemCommand.NextSystemName = markedGate.Name;
+
+            await _overviewApiClient.ClickOnObject(markedGate);
+            var selectedItemInfo = await _selectItemApiClient.GetSelectItemInfo();
+
+            // todo: case when appear miss click to obj on overview?
+            if (selectedItemInfo.Buttons.Where(btn => btn.Action == "Jump").Any())
+                await _selectItemApiClient.ClickButton("Jump");
+            else
+                await _selectItemApiClient.ClickButton("Dock");
         }
 
-        // todo: WarpToAnomaly will used rarely, separate to another "Strategy" class
         public async Task WarpToAnomaly()
         {
-            var anomalies = await _probeScannerApiClient.GetProbeScanResults();
-            if (!anomalies.Any())
-            {
-                return;
-            }
-            var nearlyAnomaly = anomalies.OrderBy(anomaly => anomaly.Distance.Value).FirstOrDefault();
+            var nearlyAnomaly = _coordinator.Commands.WarpToAnomalyCommand.Anomaly;
             await _probeScannerApiClient.WarpToAnomaly(nearlyAnomaly);
-
-            // todo: finish GotoAnomalyRequested when ship locating near anomaly in 2-3 km
-            //_botStateService.UpdateCommand(cmd => cmd.GotoAnomalyRequested = false);
         }
 
         public async Task Wait()

@@ -9,10 +9,6 @@ namespace Domen.Entities
 {
     public class BotState
     {
-        public string CurrentSystem { get; set; }
-        public FlightMode CurrentMovement { get; set; }
-        public string CurrentMovementObject { get; set; }
-        public bool IsDestSet { get; set; }
         public bool IsStrategyRunning { get; set; }
     }
 }

@@ -12,14 +12,14 @@ namespace Application.Services
     public class DroneService : IDroneService, IWorkerService
     {
         private IDroneApiClient _droneApiClient;
-        private IBotStateService _botStateService;
+        private ICoordinator _coordinator;
         private bool _rescooping;
         private CancellationTokenSource _cancellationTokenSource;
 
-        public DroneService(IDroneApiClient droneApiClient, IBotStateService botStateService)
+        public DroneService(IDroneApiClient droneApiClient, ICoordinator coordinator)
         {
             _droneApiClient = droneApiClient;
-            _botStateService = botStateService;
+            _coordinator = coordinator;
             _rescooping = false;
         }
 
@@ -31,16 +31,27 @@ namespace Application.Services
             {
                 while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
+                    if (!_coordinator.Commands.IsBattleModeActivated)
+                    {
+                        if (!_coordinator.ShipState.DronesScooped)
+                        {
+                            await Scoop();
+                        }
+                        await Wait();
+                        continue;
+                    }
+
                     if (_rescooping)
                     {
                         await Rescoop();
+                        await Wait();
+                        continue;
                     }
-                    if (!_rescooping)
-                    {
-                        await EnsureHpIsNormal();
-                        await EnsureEngage();
-                    }
-                    
+
+                    await EnsureDronesLaunched();
+                    await EnsureHpIsNormal();
+                    await EnsureEngage();
+
                     await Task.Delay(1000);
                 }
             });
@@ -53,7 +64,7 @@ namespace Application.Services
 
         private async Task Rescoop()
         {
-            Scoop();
+            await Scoop();
             if (await AllDronesInBay())
             {
                 _rescooping = false;
@@ -65,9 +76,9 @@ namespace Application.Services
             var drones = await _droneApiClient.GetDronesInfo();
             if (drones.Where(drone => drone.Location == "space").Any())
             {
-                return true;
+                return false;
             }
-            return false;
+            return true;
         }
 
         private async Task EnsureHpIsNormal()
@@ -83,33 +94,43 @@ namespace Application.Services
         public async Task EnsureEngage()
         {
             var drones = await _droneApiClient.GetDronesInfo();
-            if (drones.ToList().Exists(drone => drone.WorkMode != "Fighting")
-                && _botStateService.Command.AllowToOpenFire
+            if (drones.ToList()
+                .Exists(drone => drone.Location == "space" && drone.WorkMode != "Fighting")
+                && _coordinator.Commands.OpenFireAuthorized
                 )
             {
                 await _droneApiClient.Engage();
             }
         }
 
-        public async Task Launch()
+        private async Task EnsureDronesLaunched()
         {
             var drones = await _droneApiClient.GetDronesInfo();
-            if (drones.ToList().Exists(drone => drone.Location == "bay")
-                // todo: config for bot
-                //&& drones.ToList().Where(drone => drone.Location == "space").Count() < config.dronesSpaceCount
-                )
+            var countInSpace = drones.ToList().Where(drone => drone.Location == "space").Count();
+            if (countInSpace < _coordinator.Config.DronesInSpaceCount)
             {
-                await _droneApiClient.Launch();
+                await Launch();
             }
+        }
+
+        public async Task Launch()
+        {
+            await _droneApiClient.Launch();
         }
 
         public async Task Scoop()
         {
             var drones = await _droneApiClient.GetDronesInfo();
-            if (drones.ToList().Exists(drone => drone.WorkMode != "Returning"))
+            if (drones.ToList()
+                .Exists(drone => drone.Location == "space" && drone.WorkMode != "Returning"))
             {
                 await _droneApiClient.Scoop();
             }
+        }
+
+        public async Task Wait()
+        {
+            await Task.Delay(5000);
         }
     }
 }

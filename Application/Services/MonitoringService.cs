@@ -13,16 +13,19 @@ namespace Application.Services
     {
         private IInfoPanelApiClient _infoPanelApiClient;
         private IHudInterfaceApiClient _hudInterfaceApiClient;
-        private IBotStateService _botStateService;
+        private IDroneApiClient _droneApiClient;
+        private ICoordinator _coordinator;
         private CancellationTokenSource _cancellationTokenSource;
 
         public MonitoringService(IInfoPanelApiClient infoPanelApiClient, 
             IHudInterfaceApiClient hudInterfaceApiClient,
-            IBotStateService botStateService)
+            IDroneApiClient droneApiClient,
+            ICoordinator coordinator)
         {
             _infoPanelApiClient = infoPanelApiClient;
             _hudInterfaceApiClient = hudInterfaceApiClient;
-            _botStateService = botStateService;
+            _droneApiClient = droneApiClient;
+            _coordinator = coordinator;
 
         }
 
@@ -35,8 +38,9 @@ namespace Application.Services
                 while (!_cancellationTokenSource.Token.IsCancellationRequested)
                 {
                     await UpdateShipState();
-                    //await UpdateCurrentSystem();
+                    await UpdateCurrentSystem();
                     await EnsureDestSet();
+                    await UpdateDronesInBayCount();
 
                     await Task.Delay(1000);
                 }
@@ -48,27 +52,32 @@ namespace Application.Services
             _cancellationTokenSource?.Cancel();
         }
 
+        private async Task UpdateCurrentSystem()
+        {
+            var location = await _infoPanelApiClient.GetLocation();
+            _coordinator.ShipState.CurrentSystem = location.Name;
+        }
+
         public async Task UpdateShipState()
         {
             var shipState = await _hudInterfaceApiClient.GetShipFlightMode();
-            _botStateService.UpdateState(state =>
-            {
-                state.CurrentMovement = shipState.FlightMode;
-                state.CurrentMovementObject = shipState.ItemAndDistance;
-            });
+            _coordinator.ShipState.CurrentMovement = shipState.FlightMode;
+            _coordinator.ShipState.CurrentMovementObject = shipState.ItemAndDistance;
+        }
+
+        private async Task UpdateDronesInBayCount()
+        {
+            var drones = await _droneApiClient.GetDronesInfo();
+            if (drones.Where(drone => drone.Location == "space").Any())
+                _coordinator.ShipState.DronesScooped = false;
+            else
+                _coordinator.ShipState.DronesScooped = true;
         }
 
         public async Task EnsureDestSet()
         {
             var routePanel = await _infoPanelApiClient.GetRoutePanel();
-            if (routePanel.Systems.Any())
-            {
-                _botStateService.UpdateState(state => state.IsDestSet = true);
-            }
-            else
-            {
-                _botStateService.UpdateState(state => state.IsDestSet = false);
-            }
+            _coordinator.ShipState.IsDestSet = routePanel.Systems.Any();
         }
     }
 }
