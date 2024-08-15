@@ -21,21 +21,25 @@ namespace Infrastructure.ApiClients
         public async Task<IEnumerable<InventoryItem>> GetInventoryInfo()
         {
             var response = await _httpClient.GetAsync("/Inventory/GetInventoryInfo");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<IEnumerable<InventoryItem>>();
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<IEnumerable<InventoryItem>>();
+            else
+                return null;
         }
 
+        // todo: separate return bool for success and for opened / closed
         public async Task<bool> IsContainerOpened()
         {
             var response = await _httpClient.GetAsync("/Inventory/IsContainerOpened");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<bool>();
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<bool>();
+            else
+                return false;
         }
 
         public async Task LootAll()
         {
             var response = await _httpClient.PostAsync("/Inventory/LootAll", null);
-            response.EnsureSuccessStatusCode();
         }
     }
 }

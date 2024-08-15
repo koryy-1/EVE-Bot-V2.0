@@ -21,26 +21,25 @@ namespace Infrastructure.ApiClients
         public async Task<IEnumerable<Drone>> GetDronesInfo()
         {
             var response = await _httpClient.GetAsync("/Drones/GetDronesInfo");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<IEnumerable<Drone>>();
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<IEnumerable<Drone>>();
+            else
+                return null;
         }
 
         public async Task Engage()
         {
             var response = await _httpClient.PostAsync("/Drones/Engage", null);
-            response.EnsureSuccessStatusCode();
         }
 
         public async Task Launch()
         {
             var response = await _httpClient.PostAsync("/Drones/Launch", null);
-            response.EnsureSuccessStatusCode();
         }
 
         public async Task Scoop()
         {
             var response = await _httpClient.PostAsync("/Drones/Scoop", null);
-            response.EnsureSuccessStatusCode();
         }
     }
 }

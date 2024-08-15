@@ -1,6 +1,11 @@
 ﻿using Application.Interfaces;
 using Application.Interfaces.ApiClients;
+using Domen.Entities;
+using Domen.Entities.Commands;
+using Domen.Enums;
 using Domen.ValueObjects;
+using Hangfire;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,84 +14,97 @@ using System.Threading.Tasks;
 
 namespace Application.Services
 {
-    public class CmdExecChecker : IWorkerService
+    public class CmdExecChecker : BotWorker
     {
         private IOverviewApiClient _overviewApiClient;
         private IInfoPanelApiClient _infoPanelApiClient;
         private IProbeScannerApiClient _probeScannerApiClient;
-        private ICoordinator _coordinator;
-        private CancellationTokenSource _cancellationTokenSource;
+        private string _nextSystem;
 
-        public CmdExecChecker(IOverviewApiClient overviewApiClient, 
+        public CmdExecChecker(
+            IOverviewApiClient overviewApiClient, 
             IInfoPanelApiClient infoPanelApiClient, 
             IProbeScannerApiClient probeScannerApiClient,
-            ICoordinator coordinator)
+            ICoordinator coordinator
+        ) : base(coordinator, "exec-checker")
         {
             _overviewApiClient = overviewApiClient;
             _infoPanelApiClient = infoPanelApiClient;
             _probeScannerApiClient = probeScannerApiClient;
-            _coordinator = coordinator;
         }
 
-        public Task StartAsync()
+        protected override async Task CyclingWork(CancellationToken stoppingToken)
         {
-            _cancellationTokenSource = new CancellationTokenSource();
-
-            return Task.Run(async () =>
-            {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
-                {
-                    await EnsureGotoNextSysExecuted();
-                    await EnsurePrimaryTargetDestroyed();
-                    await EnsureNearestAnomalyIsRight();
-
-                    await Task.Delay(1000);
-                }
-            });
-        }
-
-        public void Stop()
-        {
-            _cancellationTokenSource?.Cancel();
+            await EnsureGotoNextSysExecuted();
+            await EnsurePrimaryTargetDestroyed();
+            await EnsureNearestAnomalyIsRight();
         }
 
         private async Task EnsureNearestAnomalyIsRight()
         {
-            if (!_coordinator.Commands.WarpToAnomalyCommand.Requested)
+            if (!Coordinator.Commands.WarpToAnomalyCommand.Requested)
                 return;
 
             var scanResults = await _probeScannerApiClient.GetProbeScanResults();
             var anomaly = scanResults
-                .FirstOrDefault(res => res.ID == _coordinator.Commands.WarpToAnomalyCommand.Anomaly.ID);
+                .FirstOrDefault(res => res.ID == Coordinator.Commands.WarpToAnomalyCommand.Anomaly.ID);
 
-            // measure == "m" mean anomaly nearest
-            if (anomaly?.Distance.Measure == "m")
+            if (anomaly is null 
+                || (
+                    (anomaly.Distance.Measure == "km" || anomaly.Distance.Measure == "m")
+                    && Coordinator.ShipState.CurrentMovement != FlightMode.Warping
+                    )
+                )
             {
-                _coordinator.Commands.WarpToAnomalyCommand.Requested = false;
+                Coordinator.Commands.WarpToAnomalyCommand.Requested = false;
             }
         }
 
         private async Task EnsurePrimaryTargetDestroyed()
         {
-            if (!_coordinator.Commands.DestroyTargetCommand.Requested)
+            if (!Coordinator.Commands.DestroyTargetCommand.Requested)
                 return;
 
             var OvObjects = await _overviewApiClient.GetOverViewInfo();
-            if (OvObjects.Where(obj => obj == _coordinator.Commands.DestroyTargetCommand.Target).Any())
+            if (!OvObjects.Where(obj => obj.Name == Coordinator.Commands.DestroyTargetCommand.Target.Name).Any())
             {
-                _coordinator.Commands.DestroyTargetCommand.Requested = false;
+                Coordinator.Commands.DestroyTargetCommand.Requested = false;
             }
         }
 
         private async Task EnsureGotoNextSysExecuted()
         {
-            if (!_coordinator.Commands.GotoNextSystemCommand.Requested)
+            if (!Coordinator.Commands.GotoNextSystemCommand.Requested)
                 return;
 
-            // пока парсинг InfoPanel не корректный можно Requested = false вставить в NavigService
-            if (_coordinator.ShipState.CurrentSystem == _coordinator.Commands.GotoNextSystemCommand.NextSystemName)
+            if (string.IsNullOrEmpty(_nextSystem))
             {
-                _coordinator.Commands.GotoNextSystemCommand.Requested = false;
+                _nextSystem = await GetActualNextSystem();
+            }
+
+            // todo: если GotoNextSystemCommand.NextSystemName выставлен то он никогда не выполнится
+            // написать другое условие для выполнения команды
+            var actualNextSystem = await GetActualNextSystem();
+
+            if (_nextSystem != actualNextSystem)
+            {
+                Coordinator.Commands.GotoNextSystemCommand = new GotoNextSystemCommand();
+                _nextSystem = null;
+            }
+        }
+
+        private async Task<string> GetActualNextSystem()
+        {
+            if (string.IsNullOrEmpty(Coordinator.Commands.GotoNextSystemCommand.NextSystemName)
+                || Coordinator.Commands.GotoNextSystemCommand.NextSystemName == "string"
+                )
+            {
+                var asd = _infoPanelApiClient.GetRoutePanel().GetAwaiter().GetResult().NextSystemInRoute;
+                return asd;
+            }
+            else
+            {
+                return Coordinator.Commands.GotoNextSystemCommand.NextSystemName;
             }
         }
     }

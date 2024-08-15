@@ -22,15 +22,19 @@ namespace Infrastructure.ApiClients
         public async Task<RoutePanel> GetRoutePanel()
         {
             var response = await _httpClient.GetAsync("/InfoPanel/GetRoutePanel");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<RoutePanel>();
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<RoutePanel>();
+            else
+                return null;
         }
 
         public async Task<LocationInfo> GetLocation()
         {
             var response = await _httpClient.GetAsync("/InfoPanel/GetLocation");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<LocationInfo>();
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<LocationInfo>();
+            else
+                return null;
         }
 
         public Task ClearAllWaypoints()

@@ -19,6 +19,11 @@ namespace Application.Services
 
             if (ComparedColor.Red == 55
             && ComparedColor.Green == 55
+            && ComparedColor.Blue == 0)
+                return Colors.DarkYellow;
+
+            if (ComparedColor.Red == 55
+            && ComparedColor.Green == 55
             && ComparedColor.Blue == 55)
                 return Colors.Gray;
 

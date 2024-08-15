@@ -1,7 +1,10 @@
 ﻿using Application.Interfaces;
 using Application.Interfaces.ApiClients;
+using Domen.Entities;
 using Domen.Entities.Commands;
 using Domen.Enums;
+using Hangfire;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,60 +14,50 @@ using System.Threading.Tasks;
 
 namespace Application.Services
 {
-    public class LootingService : IWorkerService
+    public class LootingService : BotWorker
     {
         private IOverviewApiClient _overviewApiClient;
         private ISelectItemApiClient _selectItemApiClient;
         private IInventoryApiClient _inventoryApiClient;
-        private ICoordinator _coordinator;
-        private CancellationTokenSource _cancellationTokenSource;
 
-        public LootingService(IOverviewApiClient overviewApiClient,
+        public LootingService(
+            IOverviewApiClient overviewApiClient,
             ISelectItemApiClient selectItemApiClient,
             IInventoryApiClient inventoryApiClient,
-            ICoordinator coordinator)
+            ICoordinator coordinator
+        ) : base(coordinator, "looting-service")
         {
             _overviewApiClient = overviewApiClient;
             _selectItemApiClient = selectItemApiClient;
             _inventoryApiClient = inventoryApiClient;
-            _coordinator = coordinator;
         }
 
-        public Task StartAsync()
+        protected override async Task CyclingWork(CancellationToken stoppingToken)
         {
-            _cancellationTokenSource = new CancellationTokenSource();
-
-            return Task.Run(async () =>
+            if (!LootingRequested())
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
-                {
-                    if (!LootingRequested())
-                    {
-                        await Wait();
-                        continue;
-                    }
+                await Wait(stoppingToken);
+                return;
+            }
 
-                    await EnsureSetupMovementCommand();
-                    await EnsureContAvailableForLoot();
-                    await EnsureCommandExecuted();
-
-                    await Task.Delay(1000);
-                }
-            });
-        }
-
-        public void Stop()
-        {
-            _cancellationTokenSource?.Cancel();
+            await EnsureSetupMovementCommand();
+            await EnsureContAvailableForLoot();
+            await EnsureCommandExecuted();
         }
 
         private bool LootingRequested()
         {
-            return _coordinator.Commands.LootingCommand.Requested;
+            return Coordinator.Commands.LootingCommand.Requested;
         }
 
         private async Task EnsureSetupMovementCommand()
         {
+            if (!GetFilteredConts().GetAwaiter().GetResult().Any())
+            {
+                UnsetMovementCommand();
+                return;
+            }
+
             if (!await IsContainerAvailableForLoot())
                 await SetMovementCommand();
             else
@@ -75,10 +68,10 @@ namespace Application.Services
         {
             var ovObjects = await _overviewApiClient.GetOverViewInfo();
             var nearestCont = ovObjects
-                // check gray color on looted cont
-                //.Where(item => Utils.Color2Text(item.Color) != Colors.Gray)
+                .Where(item => Utils.Color2Text(item.Color) != Colors.Gray)
                 .Where(item => Utils.Color2Text(item.Color) != Colors.Yellow)
-                .Where(item => item.Name == _coordinator.Commands.LootingCommand.Container.Name)
+                .Where(item => Utils.Color2Text(item.Color) != Colors.DarkYellow)
+                .Where(item => item.Name == Coordinator.Commands.LootingCommand.Container.Name)
                 .Where(item => Utils.Distance2Km(item.Distance) < 2.5);
 
             return nearestCont.Any();
@@ -88,12 +81,15 @@ namespace Application.Services
         {
             var ovObjects = await _overviewApiClient.GetOverViewInfo();
             var nearestCont = ovObjects
-                // check gray color on looted cont
-                //.Where(item => Utils.Color2Text(item.Color) != Colors.Gray)
+                .Where(item => Utils.Color2Text(item.Color) != Colors.Gray)
                 .Where(item => Utils.Color2Text(item.Color) != Colors.Yellow)
-                .Where(item => item.Name == _coordinator.Commands.LootingCommand.Container.Name)
-                .OrderBy(item => item.Distance.Value)
+                .Where(item => Utils.Color2Text(item.Color) != Colors.DarkYellow)
+                .Where(item => item.Name == Coordinator.Commands.LootingCommand.Container.Name)
+                .OrderBy(item => Utils.Distance2Km(item.Distance))
                 .FirstOrDefault();
+
+            if (nearestCont is null)
+                return;
 
             var cmd = new MovementCommand()
             {
@@ -103,12 +99,12 @@ namespace Application.Services
                 ExpectingMovementState = FlightMode.Approaching
             };
 
-            _coordinator.Commands.MoveCommands[PriorityLevel.Low] = cmd;
+            Coordinator.Commands.MoveCommands[PriorityLevel.Low] = cmd;
         }
 
         private void UnsetMovementCommand()
         {
-            _coordinator.Commands.MoveCommands[PriorityLevel.Low].Requested = false;
+            Coordinator.Commands.MoveCommands[PriorityLevel.Low].Requested = false;
         }
 
         private async Task EnsureContAvailableForLoot()
@@ -121,8 +117,19 @@ namespace Application.Services
 
         private async Task LootCont()
         {
-            var cont = _coordinator.Commands.LootingCommand.Container;
-            await _overviewApiClient.ClickOnObject(cont);
+            var ovObjects = await _overviewApiClient.GetOverViewInfo();
+            var nearestCont = ovObjects
+                .Where(item => Utils.Color2Text(item.Color) != Colors.Gray)
+                .Where(item => Utils.Color2Text(item.Color) != Colors.Yellow)
+                .Where(item => Utils.Color2Text(item.Color) != Colors.DarkYellow)
+                .Where(item => item.Name == Coordinator.Commands.LootingCommand.Container.Name)
+                .OrderBy(item => Utils.Distance2Km(item.Distance))
+                .FirstOrDefault();
+
+            if (nearestCont is null)
+                return;
+
+            await _overviewApiClient.ClickOnObject(nearestCont);
             await _selectItemApiClient.ClickButton("OpenCargo");
             await Task.Delay(1000);
             if (await _inventoryApiClient.IsContainerOpened())
@@ -135,28 +142,29 @@ namespace Application.Services
 
         private async Task EnsureCommandExecuted()
         {
-            // условия выполнения команды
-            // цвет иконки стал темно серым
-            // иконка поменялась на пустую
-            var ovObjects = await _overviewApiClient.GetOverViewInfo();
-            var nearestCont = ovObjects
-                // check gray color on looted cont
-                //.Where(item => Utils.Color2Text(item.Color) != Colors.Gray)
-                .Where(item => Utils.Color2Text(item.Color) != Colors.Yellow)
-                .Where(item => item.Name == _coordinator.Commands.LootingCommand.Container.Name)
-                .FirstOrDefault();
+            var conts = await GetFilteredConts();
 
-            if (await _inventoryApiClient.IsContainerOpened()
-
+            if (!await _inventoryApiClient.IsContainerOpened()
+                && !conts.Any()
                 )
             {
-                _coordinator.Commands.LootingCommand.Requested = false;
+                Coordinator.Commands.LootingCommand.Requested = false;
             }
         }
 
-        public async Task Wait()
+        private async Task<IEnumerable<OverviewItem>> GetFilteredConts()
         {
-            await Task.Delay(5000);
+            var ovObjects = await _overviewApiClient.GetOverViewInfo();
+            return ovObjects
+                .Where(item => Utils.Color2Text(item.Color) != Colors.Gray)
+                .Where(item => Utils.Color2Text(item.Color) != Colors.Yellow)
+                .Where(item => Utils.Color2Text(item.Color) != Colors.DarkYellow)
+                .Where(item => item.Name == Coordinator.Commands.LootingCommand.Container.Name);
+        }
+
+        private async Task Wait(CancellationToken stoppingToken)
+        {
+            await Task.Delay(5000, stoppingToken);
         }
     }
 }

@@ -11,9 +11,11 @@ namespace Domen.Entities
     public class BotCommands
     {
         public bool ExecutorAuthorized { get; set; }
+        public bool BotServiceAuthorized { get; set; }
+
         public bool IsBattleModeActivated { get; set; }
         public bool IsTargetLocked { get; set; }
-        public bool IsTargetInWeaponRange { get; set; }
+        public bool IsAimTargetInWeaponRange { get; set; }
         public bool OpenFireAuthorized { get; set; }
 
         public Dictionary<PriorityLevel, MovementCommand> MoveCommands { get; set; } = new()

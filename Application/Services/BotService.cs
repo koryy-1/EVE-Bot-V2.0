@@ -11,18 +11,16 @@ namespace Application.Services
 {
     public class BotService : IBotService
     {
-        private readonly IEnumerable<IWorkerService> _workerServices;
-        private readonly IExecutor _executor;
-        //private IEnumerable<Task> _workers;
-        //private Task _execWorker;
+        public bool IsConfigLoaded { get; private set; }
+
         private ICoordinator _coordinator;
         private bool _isRunning;
         private readonly object _lock = new object();
 
-        public BotService(IEnumerable<IWorkerService> workerServices, IExecutor executor, ICoordinator coordinator)
+        public BotService(ICoordinator coordinator)
         {
-            _workerServices = workerServices;
-            _executor = executor;
+            IsConfigLoaded = false;
+
             _coordinator = coordinator;
             _isRunning = false;
         }
@@ -36,17 +34,9 @@ namespace Application.Services
             }
 
             _isRunning = true;
-
-            var workers = _workerServices.Select(service => service.StartAsync());
-            var execWorker = _executor.StartAsync();
+            _coordinator.Commands.BotServiceAuthorized = true;
 
             // after checking output "Core Systems Operational"
-
-            //_workers = workers;
-            //_execWorker = execWorker;
-
-            Task.WhenAll(workers);
-            Task.WhenAll(execWorker);
         }
 
         public void StopBotServices()
@@ -57,24 +47,20 @@ namespace Application.Services
             }
 
             _isRunning = false;
-
-            foreach (var service in _workerServices)
-            {
-                service.Stop();
-            }
-            _executor.Stop();
+            _coordinator.Commands.BotServiceAuthorized = false;
+            DenyExecutorAuthorization();
         }
 
         public void AuthorizeExecutor()
         {
-            // чекнуть если уже запущен
-            _coordinator.Commands.ExecutorAuthorized = true;
+            if (!_coordinator.Commands.ExecutorAuthorized)
+                _coordinator.Commands.ExecutorAuthorized = true;
         }
 
         public void DenyExecutorAuthorization()
         {
-            // чекнуть если уже остановлен
-            _coordinator.Commands.ExecutorAuthorized = false;
+            if (_coordinator.Commands.ExecutorAuthorized)
+                _coordinator.Commands.ExecutorAuthorized = false;
         }
 
         public BotState GetBotState()
@@ -92,9 +78,7 @@ namespace Application.Services
                 if (_isRunning)
                 {
                     return new BotStatus { 
-                        IsServicesRunning = _isRunning,
-                        //ExecWorkerStatus = _execWorker.Status.ToString(),
-                        //WorkerStatuses = _workers.Select(x => x.Status.ToString()),
+                        IsBotServicesRunning = _isRunning,
                     };
                 }
                 else
@@ -103,10 +87,21 @@ namespace Application.Services
                 }
             }
         }
+        public BotConfig GetConfig()
+        {
+            lock (_lock)
+            {
+                return _coordinator.Config;
+            }
+        }
 
         public void LoadConfig(BotConfig config)
         {
-            _coordinator.SetConfig(config);
+            lock ( _lock)
+            {
+                _coordinator.SetConfig(config);
+            }
+            IsConfigLoaded = true;
         }
     }
 }

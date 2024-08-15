@@ -17,6 +17,7 @@ namespace Application.Strategies
         private IOverviewApiClient _overviewApiClient;
         private ICoordinator _coordinator;
         private DestroyerStrategy _destroyerStrategy;
+
         public FarmingStrategy(IProbeScannerApiClient probeScannerApiClient,
             IOverviewApiClient overviewApiClient,
             ICoordinator coordinator,
@@ -28,7 +29,7 @@ namespace Application.Strategies
             _destroyerStrategy = destroyerStrategy;
         }
 
-        public async void Start()
+        public async Task Start()
         {
             _coordinator.BotState.IsStrategyRunning = true;
 
@@ -40,13 +41,15 @@ namespace Application.Strategies
                     await _destroyerStrategy.DESTRXY_EVERYXNE();
                     await LootConts(new List<string>() { "Shadow Serpentis", "Dread Guristas" });
                     await EnsureDronesScooped();
+                    await Task.Delay(5000);
                 }
 
-                if (!IsMarkedGate())
+                if (!IsNextGateMarked())
                     break;
 
                 await GotoNextSystem();
             }
+            // todo: dock to station
             Stop();
         }
 
@@ -70,14 +73,18 @@ namespace Application.Strategies
 
         private async Task GotoNextSystem()
         {
-            _coordinator.Commands.GotoNextSystemCommand.Requested = true;
+            _coordinator.Commands.GotoNextSystemCommand = new GotoNextSystemCommand
+            {
+                Requested = true
+            };
             while (_coordinator.Commands.GotoNextSystemCommand.Requested)
             {
                 await Task.Delay(1000);
             }
+            await Task.Delay(5000);
         }
 
-        private bool IsMarkedGate()
+        private bool IsNextGateMarked()
         {
             return _coordinator.ShipState.IsDestSet;
         }
@@ -131,8 +138,8 @@ namespace Application.Strategies
 
         private async Task WarpToAnomaly()
         {
-            var scanRes = await _probeScannerApiClient.GetProbeScanResults();
-            var anomaly = scanRes
+            var scanResults = await _probeScannerApiClient.GetProbeScanResults();
+            var anomaly = scanResults
                 .Where(res =>
                 {
                     return res.Name == "Guristas Refuge"

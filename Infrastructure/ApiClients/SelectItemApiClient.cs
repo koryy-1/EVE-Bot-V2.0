@@ -24,16 +24,19 @@ namespace Infrastructure.ApiClients
         {
             var response = await _httpClient.GetAsync("/SelectedItem/GetSelectItemInfo");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<SelectedItemInfo>();
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<SelectedItemInfo>();
+            else
+                return null;
         }
 
-        public async Task ClickButton(string btnName)
+        public async Task<bool> ClickButton(string btnName)
         {
             var json = JsonSerializer.Serialize(btnName);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync("/SelectedItem/ClickButton", content);
-            response.EnsureSuccessStatusCode();
+            return response.IsSuccessStatusCode;
         }
     }
 }

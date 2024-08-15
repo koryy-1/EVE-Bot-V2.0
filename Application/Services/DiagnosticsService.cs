@@ -1,4 +1,6 @@
 ﻿using Application.Interfaces;
+using Hangfire;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,15 +9,15 @@ using System.Threading.Tasks;
 
 namespace Application.Services
 {
-    public class DiagnosticsService : IWorkerService
+    public class DiagnosticsService : BotWorker
     {
         // проверяет наличие ракет / дронов и просто докает и выключает executor
-        public Task StartAsync()
+
+        public DiagnosticsService(ICoordinator coordinator) : base(coordinator, "diagnostics-service")
         {
-            throw new NotImplementedException();
         }
 
-        public void Stop()
+        protected override Task CyclingWork(CancellationToken stoppingToken)
         {
             throw new NotImplementedException();
         }

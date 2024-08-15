@@ -16,5 +16,8 @@ namespace Application.Interfaces.ApiClients
         public Task<IEnumerable<ShipModule>> GetAllModules();
         public Task<ShipFlightMode> GetShipFlightMode();
         public Task<Point> GetCenterPos();
+        public Task ShipStop();
+        public Task SetFullSpeed();
+        public Task ToggleActivationModule(string moduleName);
     }
 }

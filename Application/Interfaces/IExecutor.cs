@@ -8,7 +8,5 @@ namespace Application.Interfaces
 {
     public interface IExecutor
     {
-        Task StartAsync();
-        void Stop();
     }
 }

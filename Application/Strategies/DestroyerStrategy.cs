@@ -14,6 +14,7 @@ namespace Application.Strategies
     {
         private IOverviewApiClient _overviewApiClient;
         private ICoordinator _coordinator;
+
         public DestroyerStrategy(IOverviewApiClient overviewApiClient, ICoordinator coordinator)
         {
             _overviewApiClient = overviewApiClient;
@@ -22,9 +23,12 @@ namespace Application.Strategies
 
         public async Task DESTRXY_EVERYXNE()
         {
+            if (!await IsEnemiesInOverview())
+                return;
+
             _coordinator.Commands.IsBattleModeActivated = true;
 
-            while (StartAuthorized() && !await IsEnemiesInOverview())
+            while (StartAuthorized() && await IsEnemiesInOverview())
             {
                 await Task.Delay(1000);
             }

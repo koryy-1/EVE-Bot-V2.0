@@ -16,6 +16,5 @@ namespace Application.Interfaces
         public bool IsWarpOrJumpState();
         public Task JumpToMarkedGate();
         public Task WarpToAnomaly();
-        public Task Wait();
     }
 }

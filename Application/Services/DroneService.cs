@@ -1,6 +1,8 @@
 ﻿using Application.Interfaces;
 using Application.Interfaces.ApiClients;
 using Domen.Entities;
+using Hangfire;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,57 +11,42 @@ using System.Threading.Tasks;
 
 namespace Application.Services
 {
-    public class DroneService : IDroneService, IWorkerService
+    public class DroneService : BotWorker, IDroneService
     {
         private IDroneApiClient _droneApiClient;
-        private ICoordinator _coordinator;
         private bool _rescooping;
-        private CancellationTokenSource _cancellationTokenSource;
 
-        public DroneService(IDroneApiClient droneApiClient, ICoordinator coordinator)
+        public DroneService(
+            IDroneApiClient droneApiClient, 
+            ICoordinator coordinator
+        ) : base(coordinator, "drone-service")
         {
             _droneApiClient = droneApiClient;
-            _coordinator = coordinator;
             _rescooping = false;
         }
 
-        public Task StartAsync()
+        protected override async Task CyclingWork(CancellationToken stoppingToken)
         {
-            _cancellationTokenSource = new CancellationTokenSource();
-
-            return Task.Run(async () =>
+            if (!Coordinator.Commands.IsBattleModeActivated)
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
+                if (!Coordinator.ShipState.DronesScooped)
                 {
-                    if (!_coordinator.Commands.IsBattleModeActivated)
-                    {
-                        if (!_coordinator.ShipState.DronesScooped)
-                        {
-                            await Scoop();
-                        }
-                        await Wait();
-                        continue;
-                    }
-
-                    if (_rescooping)
-                    {
-                        await Rescoop();
-                        await Wait();
-                        continue;
-                    }
-
-                    await EnsureDronesLaunched();
-                    await EnsureHpIsNormal();
-                    await EnsureEngage();
-
-                    await Task.Delay(1000);
+                    await Scoop();
                 }
-            });
-        }
+                await Wait(stoppingToken);
+                return;
+            }
 
-        public void Stop()
-        {
-            _cancellationTokenSource?.Cancel();
+            if (_rescooping)
+            {
+                await Rescoop();
+                await Wait(stoppingToken);
+                return;
+            }
+
+            await EnsureDronesLaunched();
+            await EnsureHpIsNormal();
+            await EnsureEngage();
         }
 
         private async Task Rescoop()
@@ -96,7 +83,7 @@ namespace Application.Services
             var drones = await _droneApiClient.GetDronesInfo();
             if (drones.ToList()
                 .Exists(drone => drone.Location == "space" && drone.WorkMode != "Fighting")
-                && _coordinator.Commands.OpenFireAuthorized
+                && Coordinator.Commands.OpenFireAuthorized
                 )
             {
                 await _droneApiClient.Engage();
@@ -106,8 +93,9 @@ namespace Application.Services
         private async Task EnsureDronesLaunched()
         {
             var drones = await _droneApiClient.GetDronesInfo();
-            var countInSpace = drones.ToList().Where(drone => drone.Location == "space").Count();
-            if (countInSpace < _coordinator.Config.DronesInSpaceCount)
+            var countInSpace = drones.Where(drone => drone.Location == "space").Count();
+            var countInBay = drones.Where(drone => drone.Location == "bay").Count();
+            if (countInBay != 0 && countInSpace < Coordinator.Config.DronesInSpaceCount)
             {
                 await Launch();
             }
@@ -128,9 +116,9 @@ namespace Application.Services
             }
         }
 
-        public async Task Wait()
+        private async Task Wait(CancellationToken stoppingToken)
         {
-            await Task.Delay(5000);
+            await Task.Delay(5000, stoppingToken);
         }
     }
 }

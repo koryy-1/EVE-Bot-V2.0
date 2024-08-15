@@ -1,5 +1,7 @@
 ﻿using Application.Interfaces;
 using Application.Strategies;
+using Hangfire;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -9,52 +11,45 @@ using System.Threading.Tasks;
 
 namespace Application.Services
 {
-    public class Executor : IExecutor
+    public class Executor : BotWorker, IExecutor
     {
         private Autopilot _autopilot;
         private FarmingStrategy _farmingStrategy;
-        private ICoordinator _coordinator;
-        private CancellationTokenSource _cancellationTokenSource;
 
-        public Executor(ICoordinator coordinator,
+        public Executor(
+            ICoordinator coordinator,
             Autopilot autopilot,
             FarmingStrategy farmingStrategy
-            )
+        ) : base(coordinator, "executor")
         {
-            _coordinator = coordinator;
             _autopilot = autopilot;
             _farmingStrategy = farmingStrategy;
-
         }
-        public Task StartAsync()
-        {
-            _cancellationTokenSource = new CancellationTokenSource();
 
-            return Task.Run(async () =>
+        protected override async Task CyclingWork(CancellationToken stoppingToken)
+        {
+            if (!Coordinator.Commands.ExecutorAuthorized)
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
-                {
-                    if (_coordinator.Commands.ExecutorAuthorized
-                    //&& !_autopilot.IsCompleted()
-                    && !_coordinator.BotState.IsStrategyRunning
-                    )
-                    {
-                        //switch (switch_on)
-                        //{
-                        //    default:
-                        //}
-                        //_autopilot.Start();
-                        _farmingStrategy.Start();
-                    }
-                    await Task.Delay(1000);
-                }
-            });
+                await Task.Delay(1000, stoppingToken);
+                return;
+            }
+
+            if (!Coordinator.BotState.IsStrategyRunning
+            //&& !_autopilot.IsCompleted()
+            )
+            {
+                //switch (switch_on)
+                //{
+                //    default:
+                //}
+                //_autopilot.Start();
+                _farmingStrategy.Start();
+            }
         }
 
-        public void Stop()
+        private async Task Wait(CancellationToken stoppingToken)
         {
-            _coordinator.Commands.ExecutorAuthorized = false;
-            _cancellationTokenSource?.Cancel();
+            await Task.Delay(5000, stoppingToken);
         }
     }
 }

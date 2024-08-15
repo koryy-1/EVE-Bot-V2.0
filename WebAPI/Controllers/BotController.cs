@@ -35,6 +35,13 @@ namespace WebAPI.Controllers
             return Ok(state);
         }
 
+        [HttpGet("GetConfig", Name = "GetConfig")]
+        public ActionResult<BotConfig> GetConfig()
+        {
+            var state = _botService.GetConfig();
+            return Ok(state);
+        }
+
         [HttpPost("load-config")]
         public IActionResult LoadConfig([FromBody] BotConfig config)
         {
@@ -48,11 +55,10 @@ namespace WebAPI.Controllers
         {
             var searchingStatus = await _gameService.CheckRootAddressActuality();
             if (!searchingStatus.IsActualRootAddress)
-            {
                 return BadRequest(new { message = $"UI root address is not actual" });
-            }
 
-            //check config is loaded
+            if (!_botService.IsConfigLoaded)
+                return BadRequest(new { message = $"Configuration is not loaded" });
 
             _botService.StartBotServices();
             return Ok(new { message = $"Bot services started" });
@@ -68,10 +74,8 @@ namespace WebAPI.Controllers
         [HttpPost("AuthorizeExecutor", Name = "AuthorizeExecutor")]
         public IActionResult AuthorizeExecutor()
         {
-            if (!_botService.GetBotStatus().IsServicesRunning)
-            {
+            if (!_botService.GetBotStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
-            }
 
             _botService.AuthorizeExecutor();
             return Ok(new { message = $"Executor authorized" });

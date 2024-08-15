@@ -12,6 +12,5 @@ namespace Domen.Entities.Commands
         public bool Requested { get; set; }
         public OverviewItem Target { get; set; }
         public IEnumerable<ShipModule> ActivatedModules {  get; set; }
-        public IEnumerable<ShipModule> DisactivatedModules { get; set; }
     }
 }

@@ -10,6 +10,6 @@ namespace Application.Interfaces.ApiClients
     public interface ISelectItemApiClient
     {
         public Task<SelectedItemInfo> GetSelectItemInfo();
-        public Task ClickButton(string btnName);
+        public Task<bool> ClickButton(string btnName);
     }
 }

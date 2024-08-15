@@ -10,6 +10,7 @@ namespace Domen.Enums
     {
         None,
         Yellow,
+        DarkYellow,
         Gray,
         Red,
         White

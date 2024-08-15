@@ -2,6 +2,8 @@
 using Application.Interfaces.ApiClients;
 using Domen.Entities;
 using Domen.Enums;
+using Hangfire;
+using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,71 +12,63 @@ using System.Threading.Tasks;
 
 namespace Application.Services
 {
-    public class NavigationService : INavigationService, IWorkerService
+    public class NavigationService : BotWorker, INavigationService
     {
-        private ICoordinator _coordinator;
         private IOverviewApiClient _overviewApiClient;
         private ISelectItemApiClient _selectItemApiClient;
+        private IHudInterfaceApiClient _hudInterfaceApiClient;
         private IProbeScannerApiClient _probeScannerApiClient;
+        private int _prevSpeed;
 
-        private CancellationTokenSource _cancellationTokenSource;
-
-        public NavigationService(ICoordinator coordinator, 
+        public NavigationService(
+            ICoordinator coordinator, 
             IOverviewApiClient overviewApiClient, 
             ISelectItemApiClient selectItemApiClient,
-            IProbeScannerApiClient probeScannerApiClient)
+            IHudInterfaceApiClient hudInterfaceApiClient,
+            IProbeScannerApiClient probeScannerApiClient
+        ) : base(coordinator, "navigation-service")
         {
-            _coordinator = coordinator;
             _overviewApiClient = overviewApiClient;
             _selectItemApiClient = selectItemApiClient;
+            _hudInterfaceApiClient = hudInterfaceApiClient;
             _probeScannerApiClient = probeScannerApiClient;
         }
 
-        public Task StartAsync()
+        protected override async Task CyclingWork(CancellationToken stoppingToken)
         {
-            _cancellationTokenSource = new CancellationTokenSource();
-
-            return Task.Run(async () =>
+            if (IsWarpOrJumpState())
             {
-                while (!_cancellationTokenSource.Token.IsCancellationRequested)
-                {
-                    if (IsWarpOrJumpState())
-                    {
-                        await Wait();
-                        continue;
-                    }
+                await Wait(stoppingToken);
+                return;
+            }
 
-                    if (GotoNextSystemRequested())
-                    {
-                        await JumpToMarkedGate();
-                        await Wait();
-                        continue;
-                    }
+            if (GotoNextSystemRequested())
+            {
+                await JumpToMarkedGate();
+                await Wait(stoppingToken);
+                return;
+            }
 
-                    if (WarpToAnomalyRequested())
-                    {
-                        await WarpToAnomaly();
-                        await Wait();
-                        continue;
-                    }
+            if (WarpToAnomalyRequested())
+            {
+                await WarpToAnomaly();
+                await Wait(stoppingToken);
+                return;
+            }
 
-                    await EnsureCommandsExecuting();
-
-                    await Task.Delay(1000);
-                }
-            });
-        }
-
-        public void Stop()
-        {
-            _cancellationTokenSource?.Cancel();
+            await EnsureCommandsExecuting();
+            await UpdatePrevSpeed();
         }
 
         private async Task EnsureCommandsExecuting()
         {
-            // ship stop if not requested?
             if (!IsCommandRequested())
+            {
+                if (!await IsShipStopping())
+                    await ShipStop();
+
                 return;
+            }
 
             if (!IsCommandExecuting())
             {
@@ -82,67 +76,80 @@ namespace Application.Services
             }
         }
 
+        private async Task UpdatePrevSpeed()
+        {
+            _prevSpeed = await _hudInterfaceApiClient.GetCurrentSpeed();
+        }
+
+        private async Task<bool> IsShipStopping()
+        {
+            var currentSpeed = await _hudInterfaceApiClient.GetCurrentSpeed();
+            if (currentSpeed < _prevSpeed || currentSpeed < 10)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        private async Task ShipStop()
+        {
+            await _hudInterfaceApiClient.ShipStop();
+        }
+
         public bool IsCommandRequested()
         {
-            return _coordinator.Commands.MoveCommands.Any(cmd => cmd.Value.Requested);
+            return Coordinator.Commands.MoveCommands.Any(cmd => cmd.Value.Requested);
         }
 
         public bool IsCommandExecuting()
         {
-            var cmd = _coordinator.Commands.MoveCommands
+            var cmd = Coordinator.Commands.MoveCommands
                 .Where(cmd => cmd.Value.Requested)
                 .OrderByDescending(cmd => cmd.Key)
                 .FirstOrDefault();
-            return _coordinator.ShipState.CurrentMovement == cmd.Value.ExpectingMovementState;
+            return Coordinator.ShipState.CurrentMovement == cmd.Value.ExpectingMovementState
+                && Coordinator.ShipState.CurrentMovementObject.Contains(cmd.Value.Target.Name);
         }
 
         public async Task ExecuteMovement()
         {
-            var cmd = _coordinator.Commands.MoveCommands
+            var movementCommand = Coordinator.Commands.MoveCommands
                 .Where(cmd => cmd.Value.Requested)
                 .OrderByDescending(cmd => cmd.Key)
                 .FirstOrDefault();
 
-            await _overviewApiClient.ClickOnObject(cmd.Value.Target);
-            await _selectItemApiClient.ClickButton(cmd.Value.Action.ToString());
+            if (movementCommand.Value.Target == null)
+                return;
+
+            await _overviewApiClient.ClickOnObject(movementCommand.Value.Target);
+            await _selectItemApiClient.ClickButton(movementCommand.Value.Action.ToString());
         }
 
         public bool GotoNextSystemRequested()
         {
-            return _coordinator.Commands.GotoNextSystemCommand.Requested;
+            return Coordinator.Commands.GotoNextSystemCommand.Requested;
         }
 
         public bool WarpToAnomalyRequested()
         {
-            return _coordinator.Commands.WarpToAnomalyCommand.Requested;
+            return Coordinator.Commands.WarpToAnomalyCommand.Requested;
         }
 
         public bool IsWarpOrJumpState()
         {
             return 
-                _coordinator.ShipState.CurrentMovement == FlightMode.Warping
-                || _coordinator.ShipState.CurrentMovement == FlightMode.Jumping;
+                Coordinator.ShipState.CurrentMovement == FlightMode.Warping
+                || Coordinator.ShipState.CurrentMovement == FlightMode.Jumping;
         }
 
         public async Task JumpToMarkedGate()
         {
             var ovObjects = await _overviewApiClient.GetOverViewInfo();
-            
-            var markedGate = ovObjects
-                .Where(item => item.Name == _coordinator.Commands.GotoNextSystemCommand.NextSystemName)
-                .FirstOrDefault();
 
-            if (markedGate is null)
-            {
-                markedGate = ovObjects
-                    .Where(item => Utils.Color2Text(item.Color) == Colors.Yellow)
-                    .Where(item => item.Name != "Cargo container" && !item.Name.Contains("Wreck")) // Exclude Extra
-                    .FirstOrDefault();
-            }
+            var markedGate = GetMarkedGate(ovObjects);
+
             if (markedGate is null)
                 return;
-
-            _coordinator.Commands.GotoNextSystemCommand.NextSystemName = markedGate.Name;
 
             await _overviewApiClient.ClickOnObject(markedGate);
             var selectedItemInfo = await _selectItemApiClient.GetSelectItemInfo();
@@ -154,15 +161,40 @@ namespace Application.Services
                 await _selectItemApiClient.ClickButton("Dock");
         }
 
-        public async Task WarpToAnomaly()
+        private OverviewItem? GetMarkedGate(IEnumerable<OverviewItem> ovObjects)
         {
-            var nearlyAnomaly = _coordinator.Commands.WarpToAnomalyCommand.Anomaly;
-            await _probeScannerApiClient.WarpToAnomaly(nearlyAnomaly);
+            if (!string.IsNullOrEmpty(Coordinator.Commands.GotoNextSystemCommand.NextSystemName)
+                && Coordinator.Commands.GotoNextSystemCommand.NextSystemName != "string"
+                )
+            {
+                return ovObjects
+                    .Where(item => item.Name == Coordinator.Commands.GotoNextSystemCommand.NextSystemName)
+                    .FirstOrDefault();
+            }
+            else
+            {
+                return ovObjects
+                    .Where(item => Utils.Color2Text(item.Color) == Colors.Yellow)
+                    .Where(item => item.Name != "Cargo container" && !item.Name.Contains("Wreck")) // Exclude Extra
+                    .FirstOrDefault();
+            }
         }
 
-        public async Task Wait()
+        public async Task WarpToAnomaly()
         {
-            await Task.Delay(5000);
+            var scanResults = await _probeScannerApiClient.GetProbeScanResults();
+            var anomaly = scanResults
+                .FirstOrDefault(res => res.ID == Coordinator.Commands.WarpToAnomalyCommand.Anomaly.ID);
+
+            if (anomaly is not null)
+            {
+                await _probeScannerApiClient.WarpToAnomaly(anomaly);
+            }
+        }
+
+        private async Task Wait(CancellationToken stoppingToken)
+        {
+            await Task.Delay(5000, stoppingToken);
         }
     }
 }

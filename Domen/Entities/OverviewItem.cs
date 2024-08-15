@@ -16,9 +16,8 @@ namespace Domen.Entities
             Distance = new Distance();
         }
         public Point Pos { get; set; }
-
-        //aggressive / hostile / neutral
         public string IconType { get; set; }
+        public bool LockInProgress { get; set; }
         public bool TargetLocked { get; set; }
         public bool AimOnTargetLocked { get; set; }
         public Color Color { get; set; }

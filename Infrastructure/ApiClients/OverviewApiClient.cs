@@ -23,8 +23,10 @@ namespace Infrastructure.ApiClients
         public async Task<IEnumerable<OverviewItem>> GetOverViewInfo()
         {
             var response = await _httpClient.GetAsync("/OverView/GetOverViewInfo");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<IEnumerable<OverviewItem>>();
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<IEnumerable<OverviewItem>>();
+            else
+                return null;
         }
 
         public async Task ClickOnObject(OverviewItem spaceObject)
@@ -33,7 +35,6 @@ namespace Infrastructure.ApiClients
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync("/OverView/ClickOnObject", content);
-            response.EnsureSuccessStatusCode();
         }
 
         public async Task LockTargets(IEnumerable<OverviewItem> overviewItems)
@@ -42,7 +43,6 @@ namespace Infrastructure.ApiClients
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync("/OverView/LockTargets", content);
-            response.EnsureSuccessStatusCode();
         }
 
         public async Task LockTargetByName(string name)
@@ -51,7 +51,6 @@ namespace Infrastructure.ApiClients
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync("/OverView/LockTargetByName", content);
-            response.EnsureSuccessStatusCode();
         }
     }
 }

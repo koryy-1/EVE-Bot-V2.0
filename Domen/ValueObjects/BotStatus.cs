@@ -8,8 +8,6 @@ namespace Domen.ValueObjects
 {
     public class BotStatus
     {
-        public bool IsServicesRunning { get; set; }
-        public string ExecWorkerStatus { get; set; }
-        public IEnumerable<string> WorkerStatuses { get; set; }
+        public bool IsBotServicesRunning { get; set; }
     }
 }

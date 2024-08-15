@@ -19,7 +19,7 @@ namespace Application.Strategies
             _coordinator = botStateService;
         }
 
-        public async void Start()
+        public async Task Start()
         {
             _coordinator.BotState.IsStrategyRunning = true;
 
@@ -53,7 +53,10 @@ namespace Application.Strategies
 
         private void GotoNextSystem()
         {
-            _coordinator.Commands.GotoNextSystemCommand.Requested = true;
+            _coordinator.Commands.GotoNextSystemCommand = new GotoNextSystemCommand
+            {
+                Requested = true
+            };
         }
     }
 }

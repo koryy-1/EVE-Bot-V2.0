@@ -23,8 +23,10 @@ namespace Infrastructure.ApiClients
         public async Task<IEnumerable<ProbeScanItem>> GetProbeScanResults()
         {
             var response = await _httpClient.GetAsync("/ProbeScanner/GetProbeScanResults");
-            response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<IEnumerable<ProbeScanItem>>();
+            if (response.IsSuccessStatusCode)
+                return await response.Content.ReadFromJsonAsync<IEnumerable<ProbeScanItem>>();
+            else
+                return null;
         }
 
         public async Task WarpToAnomaly(ProbeScanItem probeScanItem)
@@ -33,7 +35,6 @@ namespace Infrastructure.ApiClients
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             var response = await _httpClient.PostAsync("/ProbeScanner/WarpToAnomaly", content);
-            response.EnsureSuccessStatusCode();
         }
     }
 }
