@@ -2,8 +2,6 @@
 using Application.Interfaces.ApiClients;
 using Domen.Entities;
 using Domen.Enums;
-using Hangfire;
-using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;

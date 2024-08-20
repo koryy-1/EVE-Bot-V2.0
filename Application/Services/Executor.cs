@@ -1,7 +1,5 @@
 ﻿using Application.Interfaces;
 using Application.Strategies;
-using Hangfire;
-using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;

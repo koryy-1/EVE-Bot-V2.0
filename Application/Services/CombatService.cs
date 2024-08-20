@@ -3,8 +3,6 @@ using Application.Interfaces.ApiClients;
 using Domen.Entities;
 using Domen.Entities.Commands;
 using Domen.Enums;
-using Hangfire;
-using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,12 +28,90 @@ namespace Application.Services
             if (!Coordinator.Commands.IsBattleModeActivated)
             {
                 EnsureUnsetMovementCommand();
+                EnsureUnsetLockTargetsCommand();
                 await Wait(stoppingToken);
                 return;
             }
 
-            EnsureAimTargetInWeaponRange();
+            await EnsureSetupLockTargetsCommand();
+
+            UpdateOpenFireAuthorized();
             await EnsureSetupMovementCommand();
+        }
+
+        private async Task EnsureSetupLockTargetsCommand()
+        {
+            // todo: rewrite condition
+            if (!await IsActualLockTargetsCommand())
+                await SetLockTargetsCommand();
+            else
+                UnsetLockTargetsCommand();
+        }
+
+        private async Task<bool> IsActualLockTargetsCommand()
+        {
+            return Coordinator.Commands.LockTargetsCommand.Requested
+                && await IsCommandTargetsInWeaponRange();
+        }
+
+        private async Task<bool> IsCommandTargetsInWeaponRange()
+        {
+            var ovObjects = await _overviewApiClient.GetOverViewInfo();
+
+            foreach (var target in Coordinator.Commands.LockTargetsCommand.Targets)
+            {
+                var tgt = ovObjects
+                    .Where(item => item.Name == target.Name)
+                    .Where(item => item.Type == target.Type)
+                    .Where(item => Utils.Distance2Km(item.Distance) < Coordinator.Config.WeaponRange);
+
+                if (tgt.Any())
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private async Task SetLockTargetsCommand()
+        {
+            var targets = GetTargets().GetAwaiter().GetResult()
+                .Where(item => Utils.Distance2Km(item.Distance) < Coordinator.Config.WeaponRange);
+
+            if (!targets.Any())
+                return;
+
+            var cmd = new LockTargetsCommand()
+            {
+                Requested = true,
+                Targets = targets
+            };
+
+            Coordinator.Commands.LockTargetsCommand = cmd;
+        }
+
+        private void UnsetLockTargetsCommand()
+        {
+            Coordinator.Commands.LockTargetsCommand.Requested = false;
+        }
+
+        private async Task<IEnumerable<OverviewItem>> GetTargets()
+        {
+            var ovObjects = await _overviewApiClient.GetOverViewInfo();
+            if (Coordinator.Commands.DestroyTargetCommand.Requested)
+            {
+                return ovObjects
+                    .Where(item => item.Name == Coordinator.Commands.DestroyTargetCommand.Target.Name)
+                    .Where(item => item.Type == Coordinator.Commands.DestroyTargetCommand.Target.Type)
+                    .OrderBy(item => item.Distance.Value);
+            }
+            else
+            {
+                return ovObjects
+                    .Where(item => Utils.Color2Text(item.Color) == Colors.Red)
+                    .OrderBy(item => item.Distance.Value);
+            }
         }
 
         private void EnsureUnsetMovementCommand()
@@ -44,7 +120,7 @@ namespace Application.Services
                 UnsetMovementCommand();
         }
 
-        private void EnsureAimTargetInWeaponRange()
+        private void UpdateOpenFireAuthorized()
         {
             if (IsAimTargetInWeaponRange())
                 Coordinator.Commands.OpenFireAuthorized = true;
@@ -62,11 +138,11 @@ namespace Application.Services
 
         private async Task<bool> IsTargetsInWeaponRange()
         {
-            var primary = await GetPrimaryTarget();
+            var primary = GetTargets().GetAwaiter().GetResult().FirstOrDefault();
 
             // todo: change logic
             if (primary is null)
-                return true;
+                return false;
 
             return Utils.Distance2Km(primary.Distance) < Coordinator.Config.WeaponRange;
         }
@@ -78,40 +154,20 @@ namespace Application.Services
             // а CombatService выставляет команду на апроч цели по близости
             // как решение выставлять праймари в броадкасте
             
-            var praimaryTarget = await GetPrimaryTarget();
+            var primary = GetTargets().GetAwaiter().GetResult().FirstOrDefault();
 
-            if (praimaryTarget == null)
+            if (primary is null)
                 return;
 
             var cmd = new MovementCommand()
             {
                 Requested = true,
-                Target = praimaryTarget,
+                Target = primary,
                 Action = SpaceObjectAction.Approach,
                 ExpectingMovementState = FlightMode.Approaching
             };
 
             Coordinator.Commands.MoveCommands[PriorityLevel.Medium] = cmd;
-        }
-
-        private async Task<OverviewItem> GetPrimaryTarget()
-        {
-            var ovObjects = await _overviewApiClient.GetOverViewInfo();
-            if (Coordinator.Commands.DestroyTargetCommand.Target is not null)
-            {
-                return ovObjects
-                    .Where(item => item.Name == Coordinator.Commands.DestroyTargetCommand.Target.Name)
-                    .Where(item => item.Type == Coordinator.Commands.DestroyTargetCommand.Target.Type)
-                    .OrderBy(item => item.Distance.Value)
-                    .FirstOrDefault();
-            }
-            else
-            {
-                return ovObjects
-                    .Where(item => Utils.Color2Text(item.Color) == Colors.Red)
-                    .OrderBy(item => item.Distance.Value)
-                    .FirstOrDefault();
-            }
         }
 
         private void UnsetMovementCommand()
@@ -127,11 +183,6 @@ namespace Application.Services
         public bool IsTargetLocked()
         {
             return Coordinator.Commands.IsTargetLocked;
-        }
-
-        public void SetDestroyTargetCommand()
-        {
-            throw new NotImplementedException();
         }
 
         private async Task Wait(CancellationToken stoppingToken)

@@ -18,12 +18,15 @@ namespace Domen.Entities
         public bool IsAimTargetInWeaponRange { get; set; }
         public bool OpenFireAuthorized { get; set; }
 
+        //public Queue<ICommand> Commands { get; set; }
+
         public Dictionary<PriorityLevel, MovementCommand> MoveCommands { get; set; } = new()
         {
             { PriorityLevel.High, new MovementCommand() },
             { PriorityLevel.Medium, new MovementCommand() },
             { PriorityLevel.Low, new MovementCommand() },
         };
+        public LockTargetsCommand LockTargetsCommand { get; set; } = new();
         public DestroyTargetCommand? DestroyTargetCommand { get; set; } = new();
 
         public LootingCommand? LootingCommand { get; set; } = new();

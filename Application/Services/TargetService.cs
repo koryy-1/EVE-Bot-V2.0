@@ -2,8 +2,6 @@
 using Application.Interfaces.ApiClients;
 using Domen.Entities;
 using Domen.Enums;
-using Hangfire;
-using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -36,12 +34,17 @@ namespace Application.Services
                 return;
             }
 
-            if (IsCommandRequested())
+            if (!Coordinator.Commands.LockTargetsCommand.Requested)
             {
-                await EnsureCommandExecuting();
-                await Task.Delay(1000, stoppingToken);
+                await Wait(stoppingToken);
                 return;
             }
+
+            // кейс когда залочены 5 целей из команды LockTargetsCommand
+            // потом команда обновилась и теперь в массиве только 1 цель
+            // если макс лок = 5, разлочить лишние таргеты
+            //      - которые не коррелируют с обновленным массивом
+            //      и для освобождения места под новые таргеты
 
             if (!await IsTargetsLocked())
             {
@@ -57,47 +60,25 @@ namespace Application.Services
                 return;
             }
 
-            if (await IsExtraTargetsLocked())
-            {
-                await UnlockExtraTargets();
-                return;
-            }
-
+            await EnsureExtraTargetsUnlocked();
             await EnsureLockedTargetsInWeaponRange();
             await EnsureAimTargetInWeaponRange();
             await EnsureSwitchingTarget();
-        }
-
-        private async Task<bool> IsExtraTargetsLocked()
-        {
-            var ovObjects = await _overviewApiClient.GetOverViewInfo();
-            var extraTargets = ovObjects
-                .Where(item => item.TargetLocked)
-                .Where(item => Utils.Color2Text(item.Color) != Colors.Red);
-
-            return extraTargets.Any();
-        }
-
-        private async Task UnlockExtraTargets()
-        {
-            var ovObjects = await _overviewApiClient.GetOverViewInfo();
-            var extraTargets = ovObjects
-                .Where(item => item.TargetLocked)
-                .Where(item => Utils.Color2Text(item.Color) != Colors.Red);
-            
-            await UnlockTargets(extraTargets);
         }
 
         private async Task EnsureLockedTargetsInWeaponRange()
         {
             var ovObjects = await _overviewApiClient.GetOverViewInfo();
             var lockedTarget = ovObjects
-                .Where(item => item.TargetLocked)
+                .Where(item => item.TargetLocked);
+
+            var lockedTargetInWeaponRange = lockedTarget
                 .Where(item => Utils.Distance2Km(item.Distance) < Coordinator.Config.WeaponRange);
-            if (!lockedTarget.Any())
+
+            if (!lockedTargetInWeaponRange.Any())
             {
                 Coordinator.Commands.IsAimTargetInWeaponRange = false;
-                if (lockedTarget.Count() > 3)
+                if (lockedTarget.Count() > 3) // todo: instead 3 put value from config
                 {
                     await UnlockTargets();
                 }
@@ -124,6 +105,14 @@ namespace Application.Services
             }
         }
 
+        private async Task EnsureExtraTargetsUnlocked()
+        {
+            if (await IsExtraTargetsLocked())
+            {
+                await UnlockExtraTargets();
+            }
+        }
+
         private async Task<bool> IsLockInProgress()
         {
             var ovObjects = await _overviewApiClient.GetOverViewInfo();
@@ -138,63 +127,36 @@ namespace Application.Services
 
         private async Task LockEnemyTargets()
         {
-            var ovObjects = await _overviewApiClient.GetOverViewInfo();
-            var enemies = ovObjects
-                .Where(item => Utils.Color2Text(item.Color) == Colors.Red)
+            if (!Coordinator.Commands.LockTargetsCommand.Requested)
+                return;
+
+            var targets = GetActualTargetsForLocking().GetAwaiter().GetResult()
                 .Where(item => Utils.Distance2Km(item.Distance) < Coordinator.Config.WeaponRange);
             
-            if (enemies.Any())
+            if (targets.Any())
             {
-                await LockTargets(enemies);
+                await LockTargets(targets);
             }
         }
 
-        private async Task EnsureCommandExecuting()
+        private async Task<IEnumerable<OverviewItem>> GetActualTargetsForLocking()
         {
-            if (!IsCommandRequested())
-                return;
-
-            if (!await IsCommandExecuting())
+            List<OverviewItem> actualTargets = new List<OverviewItem>();
+            foreach (var target in Coordinator.Commands.LockTargetsCommand.Targets)
             {
-                Coordinator.Commands.IsAimTargetInWeaponRange = false;
-                await ExecuteCommand();
-                return;
-            }
-            Coordinator.Commands.IsAimTargetInWeaponRange = true;
-        }
+                var ovObjects = await _overviewApiClient.GetOverViewInfo();
+                var tgt = ovObjects
+                    .Where(item => item.Name == target.Name)
+                    .Where(item => item.Type == target.Type)
+                    .FirstOrDefault();
 
-        private async Task ExecuteCommand()
-        {
-            var ovObjects = await _overviewApiClient.GetOverViewInfo();
-            var primaryTarget = ovObjects
-                .Where(item => item.Name == Coordinator.Commands.DestroyTargetCommand.Target.Name)
-                .Where(item => item.Type == Coordinator.Commands.DestroyTargetCommand.Target.Type)
-                .Where(item => Utils.Distance2Km(item.Distance) < Coordinator.Config.WeaponRange)
-                .FirstOrDefault();
-            if (primaryTarget.TargetLocked)
-            {
-                await SwitchAimToTarget(primaryTarget);
+                if (tgt is not null)
+                {
+                    actualTargets.Add(tgt);
+                }
             }
-            else
-            {
-                await LockTargets(new List<OverviewItem> { primaryTarget });
-            }
-        }
 
-        private async Task<bool> IsCommandExecuting()
-        {
-            var ovObjects = await _overviewApiClient.GetOverViewInfo();
-            return ovObjects
-                .Where(item => item.Name == Coordinator.Commands.DestroyTargetCommand.Target.Name)
-                .Where(item => item.Type == Coordinator.Commands.DestroyTargetCommand.Target.Type)
-                .Where(item => item.AimOnTargetLocked)
-                .Where(item => Utils.Distance2Km(item.Distance) < Coordinator.Config.WeaponRange)
-                .Any();
-        }
-
-        private bool IsCommandRequested()
-        {
-            return Coordinator.Commands.DestroyTargetCommand.Requested;
+            return actualTargets;
         }
 
         public async Task SwitchAimToNearestLockedTarget()
@@ -205,7 +167,7 @@ namespace Application.Services
                 .Where(item => Utils.Distance2Km(item.Distance) < Coordinator.Config.WeaponRange)
                 .OrderBy(item => item.Distance.Value)
                 .FirstOrDefault();
-            if (nearestTarget != null)
+            if (nearestTarget is not null)
             {
                 await SwitchAimToTarget(nearestTarget);
             }
@@ -214,6 +176,44 @@ namespace Application.Services
         private async Task SwitchAimToTarget(OverviewItem primaryTarget)
         {
             await _overviewApiClient.ClickOnObject(primaryTarget);
+        }
+
+        private async Task<bool> IsExtraTargetsLocked()
+        {
+            foreach (var target in Coordinator.Commands.LockTargetsCommand.Targets)
+            {
+                var ovObjects = await _overviewApiClient.GetOverViewInfo();
+                var tgt = ovObjects
+                    .Where(item => item.Name != target.Name && item.Type != target.Type)
+                    .Where(item => item.TargetLocked);
+
+                if (tgt.Any())
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private async Task UnlockExtraTargets()
+        {
+            List<OverviewItem> extraTargets = new List<OverviewItem>();
+            foreach (var target in Coordinator.Commands.LockTargetsCommand.Targets)
+            {
+                var ovObjects = await _overviewApiClient.GetOverViewInfo();
+                var tgt = ovObjects
+                    .Where(item => item.Name != target.Name && item.Type != target.Type)
+                    .Where(item => item.TargetLocked)
+                    .FirstOrDefault();
+
+                if (tgt is not null)
+                {
+                    extraTargets.Add(tgt);
+                }
+            }
+
+            await UnlockTargets(extraTargets);
         }
 
         public async Task UnlockTargets()

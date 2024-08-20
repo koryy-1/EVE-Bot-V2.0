@@ -8,6 +8,5 @@ namespace Application.Interfaces
 {
     public interface ICombatService
     {
-        public void SetDestroyTargetCommand();
     }
 }

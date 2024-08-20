@@ -1,6 +1,4 @@
 ﻿using Application.Interfaces;
-using Hangfire;
-using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,6 +10,9 @@ namespace Application.Services
     public class DiagnosticsService : BotWorker
     {
         // проверяет наличие ракет / дронов и просто докает и выключает executor
+        // каждые 10 минут / полчаса / час (ставить запланированные задачи) проверять определенные показатели
+        // например, бот 10 минут уничтожает 1 и ту же цель, бот больше 2 часов находится в 1 и той же системе
+        // и это должно выставяться в конфиге
 
         public DiagnosticsService(ICoordinator coordinator) : base(coordinator, "diagnostics-service")
         {

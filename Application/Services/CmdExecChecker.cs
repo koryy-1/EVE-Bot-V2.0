@@ -4,8 +4,6 @@ using Domen.Entities;
 using Domen.Entities.Commands;
 using Domen.Enums;
 using Domen.ValueObjects;
-using Hangfire;
-using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Linq;
