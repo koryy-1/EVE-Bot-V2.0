@@ -33,6 +33,9 @@ namespace Application.Services
                 return;
             }
 
+            // todo: сделать метод для свертывания боевых систем
+            // (скуп дронов, изменение режима на скоростной у джекдо)
+
             await EnsureSetupLockTargetsCommand();
 
             UpdateOpenFireAuthorized();

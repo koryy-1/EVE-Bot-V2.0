@@ -80,11 +80,9 @@ namespace Application.Services
                 _nextSystem = await GetActualNextSystem();
             }
 
-            // todo: если GotoNextSystemCommand.NextSystemName выставлен то он никогда не выполнится
-            // написать другое условие для выполнения команды
             var actualNextSystem = await GetActualNextSystem();
 
-            if (_nextSystem != actualNextSystem)
+            if (actualNextSystem == null && _nextSystem != actualNextSystem)
             {
                 Coordinator.Commands.GotoNextSystemCommand = new GotoNextSystemCommand();
                 _nextSystem = null;
@@ -93,12 +91,15 @@ namespace Application.Services
 
         private async Task<string> GetActualNextSystem()
         {
+            var nextSystem = _overviewApiClient.GetOverViewInfo().GetAwaiter().GetResult()
+                .Where(item => item.Name == Coordinator.Commands.GotoNextSystemCommand.NextSystemName);
+
             if (string.IsNullOrEmpty(Coordinator.Commands.GotoNextSystemCommand.NextSystemName)
                 || Coordinator.Commands.GotoNextSystemCommand.NextSystemName == "string"
+                || !nextSystem.Any()
                 )
             {
-                var asd = _infoPanelApiClient.GetRoutePanel().GetAwaiter().GetResult().NextSystemInRoute;
-                return asd;
+                return _infoPanelApiClient.GetRoutePanel().GetAwaiter().GetResult().NextSystemInRoute;
             }
             else
             {
