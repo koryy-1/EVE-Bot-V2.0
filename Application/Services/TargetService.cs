@@ -77,6 +77,7 @@ namespace Application.Services
 
             if (!lockedTargetInWeaponRange.Any())
             {
+                // todo: create method UnlockUnnecessaryTargets
                 Coordinator.Commands.IsAimTargetInWeaponRange = false;
                 if (lockedTarget.Count() > 3) // todo: instead 3 put value from config
                 {

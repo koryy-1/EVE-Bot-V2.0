@@ -41,11 +41,8 @@ namespace Application.Services
 
         private async Task EnsureSetupLockTargetsCommand()
         {
-            // todo: rewrite condition
             if (!await IsActualLockTargetsCommand())
                 await SetLockTargetsCommand();
-            else
-                UnsetLockTargetsCommand();
         }
 
         private async Task<bool> IsActualLockTargetsCommand()
@@ -57,7 +54,6 @@ namespace Application.Services
         private async Task<bool> IsCommandTargetsInWeaponRange()
         {
             var ovObjects = await _overviewApiClient.GetOverViewInfo();
-
             foreach (var target in Coordinator.Commands.LockTargetsCommand.Targets)
             {
                 var tgt = ovObjects
@@ -91,11 +87,6 @@ namespace Application.Services
             Coordinator.Commands.LockTargetsCommand = cmd;
         }
 
-        private void UnsetLockTargetsCommand()
-        {
-            Coordinator.Commands.LockTargetsCommand.Requested = false;
-        }
-
         private async Task<IEnumerable<OverviewItem>> GetTargets()
         {
             var ovObjects = await _overviewApiClient.GetOverViewInfo();
@@ -118,6 +109,12 @@ namespace Application.Services
         {
             if (Coordinator.Commands.MoveCommands[PriorityLevel.Medium].Requested)
                 UnsetMovementCommand();
+        }
+
+        private void EnsureUnsetLockTargetsCommand()
+        {
+            if (Coordinator.Commands.LockTargetsCommand.Requested)
+                UnsetLockTargetsCommand();
         }
 
         private void UpdateOpenFireAuthorized()
@@ -173,6 +170,11 @@ namespace Application.Services
         private void UnsetMovementCommand()
         {
             Coordinator.Commands.MoveCommands[PriorityLevel.Medium].Requested = false;
+        }
+
+        private void UnsetLockTargetsCommand()
+        {
+            Coordinator.Commands.LockTargetsCommand.Requested = false;
         }
 
         public bool IsAimTargetInWeaponRange()
