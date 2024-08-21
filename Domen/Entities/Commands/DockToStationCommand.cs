@@ -6,9 +6,13 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    public class DockToStationCommand
+    public class DockToStationCommand : CommandBase
     {
-        public bool Requested { get; set; }
         public OverviewItem Station { get; set; }
+
+        public DockToStationCommand()
+        {
+            IsFinite = true;
+        }
     }
 }

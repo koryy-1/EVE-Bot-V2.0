@@ -7,10 +7,13 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    public class DestroyTargetCommand
+    public class DestroyTargetCommand : CommandBase
     {
-        public bool Requested { get; set; }
         public OverviewItem Target { get; set; }
-        public IEnumerable<ShipModule> ActivatedModules {  get; set; }
+
+        public DestroyTargetCommand()
+        {
+            IsFinite = true;
+        }
     }
 }

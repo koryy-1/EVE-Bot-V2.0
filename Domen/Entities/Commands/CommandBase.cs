@@ -6,8 +6,9 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    public class LockTargetsCommand : CommandBase
+    public abstract class CommandBase
     {
-        public IEnumerable<OverviewItem> Targets { get; set; }
+        public bool Requested { get; set; }
+        public bool IsFinite { get; set; }
     }
 }

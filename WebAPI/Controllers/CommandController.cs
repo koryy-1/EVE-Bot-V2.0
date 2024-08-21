@@ -38,20 +38,43 @@ namespace WebAPI.Controllers
             return Ok(state);
         }
 
+        [HttpPost("AddCommandQueue", Name = "AddCommandQueue")]
+        public IActionResult AddCommandQueue([FromBody] Queue<CommandBase> commandQueue)
+        {
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
+                return BadRequest(new { message = $"Bot services are not started" });
+
+            _coordinator.Commands.CommandQueue = commandQueue;
+            return Ok(new { message = $"Command queue Added" });
+        }
+
         [HttpPost("ToggleBattleMode", Name = "ToggleBattleMode")]
         public IActionResult ToggleBattleMode([FromBody] bool isActive)
         {
-            if (!_botService.GetBotStatus().IsBotServicesRunning)
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
 
             _coordinator.Commands.IsBattleModeActivated = isActive;
             return Ok(new { message = $"Battle mode activated" });
         }
 
+        [HttpPost("SetLockTargetsCmd", Name = "SetLockTargetsCmd")]
+        public IActionResult SetLockTargetsCmd([FromBody] LockTargetsCommand cmd)
+        {
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
+                return BadRequest(new { message = $"Bot services are not started" });
+
+            if (!_coordinator.Commands.IsBattleModeActivated)
+                return BadRequest(new { message = $"Battle mode is not activated" });
+
+            _coordinator.Commands.LockTargetsCommand = cmd;
+            return Ok(new { message = $"Command set" });
+        }
+
         [HttpPost("SetDestroyTargetCmd", Name = "SetDestroyTargetCmd")]
         public IActionResult SetDestroyTargetCmd([FromBody] DestroyTargetCommand cmd)
         {
-            if (!_botService.GetBotStatus().IsBotServicesRunning)
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
 
             if (!_coordinator.Commands.IsBattleModeActivated)
@@ -64,7 +87,7 @@ namespace WebAPI.Controllers
         [HttpPost("SetMovementCmd", Name = "SetMovementCmd")]
         public IActionResult SetMovementCmd([FromBody] MovementCommand cmd)
         {
-            if (!_botService.GetBotStatus().IsBotServicesRunning)
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
 
             _coordinator.Commands.MoveCommands[PriorityLevel.Low] = cmd;
@@ -74,7 +97,7 @@ namespace WebAPI.Controllers
         [HttpPost("UnSetMovementCmd", Name = "UnSetMovementCmd")]
         public IActionResult UnSetMovementCmd([FromBody] MovementCommand cmd)
         {
-            if (!_botService.GetBotStatus().IsBotServicesRunning)
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
 
             _coordinator.Commands.MoveCommands = new()
@@ -89,7 +112,7 @@ namespace WebAPI.Controllers
         [HttpPost("SetWarpToAnomalyCmd", Name = "SetWarpToAnomalyCmd")]
         public IActionResult SetWarpToAnomalyCmd([FromBody] WarpToAnomalyCommand cmd)
         {
-            if (!_botService.GetBotStatus().IsBotServicesRunning)
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
 
             _coordinator.Commands.WarpToAnomalyCommand = cmd;
@@ -99,7 +122,7 @@ namespace WebAPI.Controllers
         [HttpPost("SetGotoNextSystemCmd", Name = "SetGotoNextSystemCmd")]
         public IActionResult SetGotoNextSystemCmd([FromBody] GotoNextSystemCommand cmd)
         {
-            if (!_botService.GetBotStatus().IsBotServicesRunning)
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
 
             _coordinator.Commands.GotoNextSystemCommand = cmd;
@@ -109,7 +132,7 @@ namespace WebAPI.Controllers
         [HttpPost("SetLootingCmd", Name = "SetLootingCmd")]
         public IActionResult SetLootingCmd([FromBody] LootingCommand cmd)
         {
-            if (!_botService.GetBotStatus().IsBotServicesRunning)
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
 
             _coordinator.Commands.LootingCommand = cmd;

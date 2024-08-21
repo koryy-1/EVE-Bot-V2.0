@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    internal class ActivatingModuleCommand
+    public class ActivatingModuleCommand : CommandBase
     {
+        public IEnumerable<ShipModule> ActivatedModules { get; set; }
     }
 }

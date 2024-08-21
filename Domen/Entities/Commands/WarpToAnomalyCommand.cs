@@ -6,9 +6,13 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    public class WarpToAnomalyCommand
+    public class WarpToAnomalyCommand : CommandBase
     {
-        public bool Requested { get; set; }
         public ProbeScanItem Anomaly { get; set; }
+
+        public WarpToAnomalyCommand()
+        {
+            IsFinite = true;
+        }
     }
 }

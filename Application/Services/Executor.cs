@@ -1,5 +1,7 @@
 ﻿using Application.Interfaces;
 using Application.Strategies;
+using Domen.Entities.Commands;
+using Domen.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +15,7 @@ namespace Application.Services
     {
         private Autopilot _autopilot;
         private FarmingStrategy _farmingStrategy;
+        private CommandBase _command;
 
         public Executor(
             ICoordinator coordinator,
@@ -32,6 +35,8 @@ namespace Application.Services
                 return;
             }
 
+            ExecuteCommandFromQueue();
+
             if (!Coordinator.BotState.IsStrategyRunning
             //&& !_autopilot.IsCompleted()
             )
@@ -42,6 +47,37 @@ namespace Application.Services
                 //}
                 //_autopilot.Start();
                 _farmingStrategy.Start();
+            }
+        }
+
+        private async void ExecuteCommandFromQueue()
+        {
+            if (_command.IsFinite && _command.Requested)
+                return;
+
+            _command = Coordinator.Commands.CommandQueue.Dequeue();
+            switch (_command)
+            {
+                case LockTargetsCommand:
+                    Coordinator.Commands.LockTargetsCommand = (LockTargetsCommand)_command;
+                    break;
+                case DestroyTargetCommand:
+                    Coordinator.Commands.DestroyTargetCommand = (DestroyTargetCommand)_command;
+                    break;
+                case LootingCommand:
+                    Coordinator.Commands.LootingCommand = (LootingCommand)_command;
+                    break;
+                case MovementCommand:
+                    Coordinator.Commands.MoveCommands[PriorityLevel.Low] = (MovementCommand)_command;
+                    break;
+                case GotoNextSystemCommand:
+                    Coordinator.Commands.GotoNextSystemCommand = (GotoNextSystemCommand)_command;
+                    break;
+                case WarpToAnomalyCommand:
+                    Coordinator.Commands.WarpToAnomalyCommand = (WarpToAnomalyCommand)_command;
+                    break;
+                default:
+                    break;
             }
         }
 

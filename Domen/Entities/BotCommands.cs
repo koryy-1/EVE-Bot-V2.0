@@ -18,7 +18,7 @@ namespace Domen.Entities
         public bool IsAimTargetInWeaponRange { get; set; }
         public bool OpenFireAuthorized { get; set; }
 
-        //public Queue<ICommand> Commands { get; set; }
+        public Queue<CommandBase> CommandQueue { get; set; } = new();
 
         public Dictionary<PriorityLevel, MovementCommand> MoveCommands { get; set; } = new()
         {
@@ -27,13 +27,13 @@ namespace Domen.Entities
             { PriorityLevel.Low, new MovementCommand() },
         };
         public LockTargetsCommand LockTargetsCommand { get; set; } = new();
-        public DestroyTargetCommand? DestroyTargetCommand { get; set; } = new();
+        public DestroyTargetCommand DestroyTargetCommand { get; set; } = new();
 
-        public LootingCommand? LootingCommand { get; set; } = new();
+        public LootingCommand LootingCommand { get; set; } = new();
 
-        public GotoNextSystemCommand? GotoNextSystemCommand { get; set; } = new();
-        public WarpToAnomalyCommand? WarpToAnomalyCommand { get; set; } = new();
-        public DockToStationCommand? DockToStationCommand { get; set; } = new();
-        public WarpToCommand? WarpToCommand { get; set; } = new();
+        public GotoNextSystemCommand GotoNextSystemCommand { get; set; } = new();
+        public WarpToAnomalyCommand WarpToAnomalyCommand { get; set; } = new();
+        public DockToStationCommand DockToStationCommand { get; set; } = new();
+        public WarpToCommand WarpToCommand { get; set; } = new();
     }
 }

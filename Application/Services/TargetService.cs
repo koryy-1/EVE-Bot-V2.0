@@ -166,7 +166,7 @@ namespace Application.Services
             var nearestTarget = ovObjects
                 .Where(item => item.TargetLocked)
                 .Where(item => Utils.Distance2Km(item.Distance) < Coordinator.Config.WeaponRange)
-                .OrderBy(item => item.Distance.Value)
+                .OrderBy(item => Utils.Distance2Km(item.Distance))
                 .FirstOrDefault();
             if (nearestTarget is not null)
             {

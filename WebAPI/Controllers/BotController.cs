@@ -28,10 +28,10 @@ namespace WebAPI.Controllers
             return Ok(state);
         }
 
-        [HttpGet("GetBotStatus", Name = "GetBotStatus")]
+        [HttpGet("GetBotServiceStatus", Name = "GetBotServiceStatus")]
         public ActionResult<BotStatus> GetBotStatus()
         {
-            var state = _botService.GetBotStatus();
+            var state = _botService.GetBotServiceStatus();
             return Ok(state);
         }
 
@@ -74,7 +74,7 @@ namespace WebAPI.Controllers
         [HttpPost("AuthorizeExecutor", Name = "AuthorizeExecutor")]
         public IActionResult AuthorizeExecutor()
         {
-            if (!_botService.GetBotStatus().IsBotServicesRunning)
+            if (!_botService.GetBotServiceStatus().IsBotServicesRunning)
                 return BadRequest(new { message = $"Bot services are not started" });
 
             _botService.AuthorizeExecutor();

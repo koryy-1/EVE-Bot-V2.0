@@ -16,7 +16,7 @@ namespace Application.Interfaces
         public void AuthorizeExecutor();
         public void DenyExecutorAuthorization();
         public BotState GetBotState();
-        public BotStatus GetBotStatus();
+        public BotStatus GetBotServiceStatus();
         public BotConfig GetConfig();
         public void LoadConfig(BotConfig config);
     }

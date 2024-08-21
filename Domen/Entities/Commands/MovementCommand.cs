@@ -7,9 +7,8 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    public class MovementCommand
+    public class MovementCommand : CommandBase
     {
-        public bool Requested { get; set; }
         public OverviewItem Target { get; set; }
         public SpaceObjectAction Action { get; set; }
         public FlightMode ExpectingMovementState { get; set; }

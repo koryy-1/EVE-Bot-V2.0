@@ -6,10 +6,14 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    public class WarpToCommand
+    public class WarpToCommand : CommandBase
     {
-        public bool Requested { get; set; }
         public string Name { get; set; }
         public OverviewItem SpaceObject { get; set; }
+
+        public WarpToCommand()
+        {
+            IsFinite = true;
+        }
     }
 }

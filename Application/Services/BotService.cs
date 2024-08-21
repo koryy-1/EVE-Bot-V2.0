@@ -71,7 +71,7 @@ namespace Application.Services
             }
         }
 
-        public BotStatus GetBotStatus()
+        public BotStatus GetBotServiceStatus()
         {
             lock (_lock)
             {

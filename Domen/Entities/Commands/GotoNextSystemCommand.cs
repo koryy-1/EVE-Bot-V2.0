@@ -6,9 +6,13 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    public class GotoNextSystemCommand
+    public class GotoNextSystemCommand : CommandBase
     {
-        public bool Requested { get; set; }
         public string? NextSystemName { get; set; }
+
+        public GotoNextSystemCommand()
+        {
+            IsFinite = true;
+        }
     }
 }

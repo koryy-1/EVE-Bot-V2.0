@@ -50,6 +50,8 @@ namespace Application.Services
 
         private async Task<bool> IsActualLockTargetsCommand()
         {
+            // todo: если прилетела DestroyTargetCommand (а до этого ее не было),
+            // то нужно тутже вызвать SetLockTargetsCommand, вернув здесь false
             return Coordinator.Commands.LockTargetsCommand.Requested
                 && await IsCommandTargetsInWeaponRange();
         }
@@ -98,13 +100,13 @@ namespace Application.Services
                 return ovObjects
                     .Where(item => item.Name == Coordinator.Commands.DestroyTargetCommand.Target.Name)
                     .Where(item => item.Type == Coordinator.Commands.DestroyTargetCommand.Target.Type)
-                    .OrderBy(item => item.Distance.Value);
+                    .OrderBy(item => Utils.Distance2Km(item.Distance));
             }
             else
             {
                 return ovObjects
                     .Where(item => Utils.Color2Text(item.Color) == Colors.Red)
-                    .OrderBy(item => item.Distance.Value);
+                    .OrderBy(item => Utils.Distance2Km(item.Distance));
             }
         }
 

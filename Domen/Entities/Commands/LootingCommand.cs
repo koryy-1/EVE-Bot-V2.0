@@ -6,9 +6,13 @@ using System.Threading.Tasks;
 
 namespace Domen.Entities.Commands
 {
-    public class LootingCommand
+    public class LootingCommand : CommandBase
     {
-        public bool Requested { get; set; }
         public OverviewItem Container { get; set; }
+
+        public LootingCommand()
+        {
+            IsFinite = true;
+        }
     }
 }
